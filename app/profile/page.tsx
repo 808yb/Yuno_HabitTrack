@@ -312,6 +312,9 @@ export default function ProfilePage() {
               <p className="text-xs text-gray-500">
                 This will replace your current data. Make sure to export first!
               </p>
+              <p className="text-xs text-right text-gray-500">
+                version 1.0
+              </p>
             </div>
           </CardContent>
         </Card>
