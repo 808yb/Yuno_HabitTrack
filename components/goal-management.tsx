@@ -1,0 +1,259 @@
+"use client"
+
+import { useState } from "react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
+import { Settings, Trash2, Edit, Palette } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { supabase, isSupabaseConfigured } from "@/lib/supabase"
+
+interface GoalManagementProps {
+  goalId: string
+  goalName: string
+  goalEmoji: string
+  isSoloGoal: boolean
+  onUpdate?: () => void
+}
+
+const EMOJI_OPTIONS = [
+  '🎯', '💪', '🏃‍♂️', '🧘‍♀️', '📚', '💻', '🎨', '🎵', '🍎', '💧',
+  '😴', '🏋️‍♂️', '🚴‍♂️', '🏊‍♀️', '🧠', '💡', '⭐', '🔥', '💎', '🌟',
+  '🎪', '🎭', '🎨', '🎬', '🎤', '🎧', '🎹', '🎸', '🎺', '🥁',
+  '⚽', '🏀', '🏈', '⚾', '🎾', '🏐', '🏉', '🎱', '🏓', '🏸',
+  '🏊‍♂️', '🏄‍♀️', '🏂', '⛷️', '🏔️', '🏕️', '🏖️', '🏝️', '🏜️', '🏟️'
+]
+
+export function GoalManagement({ goalId, goalName, goalEmoji, isSoloGoal, onUpdate }: GoalManagementProps) {
+  const router = useRouter()
+  const [isRenameOpen, setIsRenameOpen] = useState(false)
+  const [isEmojiOpen, setIsEmojiOpen] = useState(false)
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false)
+  const [newName, setNewName] = useState(goalName)
+  const [selectedEmoji, setSelectedEmoji] = useState(goalEmoji)
+  const [isUpdating, setIsUpdating] = useState(false)
+
+  const handleRename = async () => {
+    if (!newName.trim()) return
+    
+    setIsUpdating(true)
+    
+    try {
+      if (isSoloGoal) {
+        const { renameSoloGoal } = await import("@/lib/local-storage")
+        renameSoloGoal(goalId, newName.trim())
+      } else {
+        if (!supabase || !isSupabaseConfigured()) {
+          throw new Error("Supabase not configured")
+        }
+        
+        const { error } = await supabase
+          .from('goals')
+          .update({ name: newName.trim() })
+          .eq('id', goalId)
+        
+        if (error) throw error
+      }
+      
+      setIsRenameOpen(false)
+      onUpdate?.()
+    } catch (error) {
+      console.error('Error renaming goal:', error)
+      alert('Failed to rename goal. Please try again.')
+    } finally {
+      setIsUpdating(false)
+    }
+  }
+
+  const handleEmojiUpdate = async () => {
+    setIsUpdating(true)
+    
+    try {
+      if (isSoloGoal) {
+        const { updateSoloGoalEmoji } = await import("@/lib/local-storage")
+        updateSoloGoalEmoji(goalId, selectedEmoji)
+      } else {
+        if (!supabase || !isSupabaseConfigured()) {
+          throw new Error("Supabase not configured")
+        }
+        
+        const { error } = await supabase
+          .from('goals')
+          .update({ emoji: selectedEmoji })
+          .eq('id', goalId)
+        
+        if (error) throw error
+      }
+      
+      setIsEmojiOpen(false)
+      onUpdate?.()
+    } catch (error) {
+      console.error('Error updating emoji:', error)
+      alert('Failed to update emoji. Please try again.')
+    } finally {
+      setIsUpdating(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    setIsUpdating(true)
+    
+    try {
+      if (isSoloGoal) {
+        const { deleteSoloGoal } = await import("@/lib/local-storage")
+        deleteSoloGoal(goalId)
+        router.push("/")
+      } else {
+        if (!supabase || !isSupabaseConfigured()) {
+          throw new Error("Supabase not configured")
+        }
+        
+        await supabase.from('group_streaks').delete().eq('goal_id', goalId)
+        await supabase.from('checkins').delete().eq('goal_id', goalId)
+        await supabase.from('participants').delete().eq('goal_id', goalId)
+        
+        const { error } = await supabase
+          .from('goals')
+          .delete()
+          .eq('id', goalId)
+        
+        if (error) throw error
+        
+        router.push("/")
+      }
+    } catch (error) {
+      console.error('Error deleting goal:', error)
+      alert('Failed to delete goal. Please try again.')
+    } finally {
+      setIsUpdating(false)
+      setIsDeleteOpen(false)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <Label className="text-sm font-medium">Goal Name</Label>
+          <p className="text-sm text-gray-600">{goalName}</p>
+        </div>
+        <Dialog open={isRenameOpen} onOpenChange={setIsRenameOpen}>
+          <DialogTrigger asChild>
+            <Button variant="outline" size="sm">
+              <Edit className="w-4 h-4 mr-2" />
+              Rename
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Rename Goal</DialogTitle>
+              <DialogDescription>
+                Enter a new name for your goal.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="goal-name">Goal Name</Label>
+                <Input
+                  id="goal-name"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder="Enter goal name"
+                  className="mt-1"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsRenameOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleRename} disabled={isUpdating || !newName.trim()}>
+                {isUpdating ? "Updating..." : "Save"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <div>
+          <Label className="text-sm font-medium">Goal Emoji</Label>
+          <p className="text-sm text-gray-600">Current: {goalEmoji}</p>
+        </div>
+        <Dialog open={isEmojiOpen} onOpenChange={setIsEmojiOpen}>
+          <DialogTrigger asChild>
+            <Button variant="outline" size="sm">
+              <Palette className="w-4 h-4 mr-2" />
+              Change
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Choose Emoji</DialogTitle>
+              <DialogDescription>
+                Select an emoji for your goal.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid grid-cols-10 gap-2 max-h-60 overflow-y-auto">
+              {EMOJI_OPTIONS.map((emoji) => (
+                <button
+                  key={emoji}
+                  onClick={() => setSelectedEmoji(emoji)}
+                  className={`p-2 text-xl rounded hover:bg-gray-100 transition-colors ${
+                    selectedEmoji === emoji ? 'bg-blue-100 border-2 border-blue-300' : ''
+                  }`}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsEmojiOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleEmojiUpdate} disabled={isUpdating}>
+                {isUpdating ? "Updating..." : "Save"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      <div className="flex items-center justify-between pt-4 border-t">
+        <div>
+          <Label className="text-sm font-medium text-red-600">Danger Zone</Label>
+          <p className="text-sm text-gray-600">Permanently delete this goal</p>
+        </div>
+        <AlertDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+          <AlertDialogTrigger asChild>
+            <Button variant="destructive" size="sm">
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This action cannot be undone. This will permanently delete the goal
+                "{goalName}" and all associated data including check-ins and streaks.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDelete}
+                className="bg-red-600 hover:bg-red-700"
+                disabled={isUpdating}
+              >
+                {isUpdating ? "Deleting..." : "Delete Goal"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    </div>
+  )
+}
