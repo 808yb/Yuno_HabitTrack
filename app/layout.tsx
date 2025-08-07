@@ -21,7 +21,7 @@ export const metadata: Metadata = {
       { url: '/yuno512.svg', sizes: 'any', type: 'image/svg+xml' },
     ],
     apple: [
-      { url: '/yuno512.svg', sizes: 'any', type: 'image/svg+xml' },
+      { url: '/yuno180.png', sizes: '180x180', type: 'image/png' },
     ],
   },
 }
@@ -43,7 +43,7 @@ html {
         `}</style>
         {/* Favicon and PWA Icons */}
         <link rel="icon" type="image/svg+xml" href="/yuno512.svg" />
-        <link rel="apple-touch-icon" href="/yuno512.svg" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/yuno180.png" />
         <link rel="shortcut icon" href="/yuno512.svg" />
         <script
           dangerouslySetInnerHTML={{
