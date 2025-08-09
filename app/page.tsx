@@ -4,19 +4,30 @@ import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { getUserIdentity, getSoloGoals, type UserIdentity, type SoloGoal, hasCheckedInToday, calculateStreak, calculateGroupStreak } from "@/lib/local-storage"
+import { getUserIdentity, getSoloGoals, type UserIdentity, type SoloGoal, hasCheckedInToday, calculateStreak, calculateGroupStreak, addCheckinToSoloGoal, getTodayDate, checkAndUpdateGroupStreak } from "@/lib/local-storage"
 import { supabase, type Goal, type Participant, type GroupStreak, isSupabaseConfigured } from "@/lib/supabase"
-import { Plus, Users, User, Target, Flame, Menu, X } from 'lucide-react'
+import { Plus, Users, User, Target, Flame, Menu, X, Sun, Moon } from 'lucide-react'
+import { useTheme } from "next-themes"
 import Link from "next/link"
 import { FirstHabitOnboarding } from "@/components/first-habit-onboarding"
 
 export default function HomePage() {
+  const { theme, setTheme, resolvedTheme } = useTheme()
+  const [visualIsDark, setVisualIsDark] = useState<boolean | null>(null)
+  const [isTogglingTheme, setIsTogglingTheme] = useState(false)
+  useEffect(() => {
+    setVisualIsDark(resolvedTheme === 'dark')
+  }, [resolvedTheme])
+  const isDarkVisual = visualIsDark ?? (resolvedTheme === 'dark')
   const [userIdentity, setUserIdentity] = useState<UserIdentity | null>(null)
   const [soloGoals, setSoloGoals] = useState<SoloGoal[]>([])
   const [groupGoals, setGroupGoals] = useState<(Goal & { participants: Participant[]; streaks: GroupStreak[] })[]>([])
   const [loading, setLoading] = useState(true)
   const [showMobileMenu, setShowMobileMenu] = useState(false)
   const [showOnboarding, setShowOnboarding] = useState(false)
+  const [loggingSoloGoalIds, setLoggingSoloGoalIds] = useState<Set<string>>(new Set())
+  const [loggingGroupGoalIds, setLoggingGroupGoalIds] = useState<Set<string>>(new Set())
+  const [groupCheckedTodayGoalIds, setGroupCheckedTodayGoalIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     const identity = getUserIdentity()
@@ -63,7 +74,8 @@ export default function HomePage() {
             max_participants,
             duration_days,
             created_at,
-            created_by
+            created_by,
+            emoji
           )
         `)
         .eq('nickname', nickname)
@@ -91,6 +103,31 @@ export default function HomePage() {
             })) as (Goal & { participants: Participant[]; streaks: GroupStreak[] })[]
 
           setGroupGoals(goalsWithParticipants)
+
+          // Determine which group goals the current user already checked in today
+          try {
+            const today = getTodayDate()
+            const myParticipantIds = goalsWithParticipants
+              .map(g => g.participants.find(pp => pp.nickname === nickname)?.id)
+              .filter((id): id is string => Boolean(id))
+
+            if (myParticipantIds.length > 0) {
+              const { data: todaysCheckins } = await supabase
+                .from('checkins')
+                .select('goal_id, participant_id, checkin_date')
+                .in('participant_id', myParticipantIds)
+                .eq('checkin_date', today)
+
+              const checkedSet = new Set<string>()
+              todaysCheckins?.forEach(ci => checkedSet.add(ci.goal_id))
+              setGroupCheckedTodayGoalIds(checkedSet)
+            } else {
+              setGroupCheckedTodayGoalIds(new Set())
+            }
+          } catch (e) {
+            // Fallback: if unable to load, keep as empty set
+            setGroupCheckedTodayGoalIds(new Set())
+          }
         }
       }
     } catch (error) {
@@ -105,9 +142,89 @@ export default function HomePage() {
     setSoloGoals(solo)
   }
 
+  const handleSoloLog = (goalId: string) => {
+    // Prevent duplicate actions
+    if (loggingSoloGoalIds.has(goalId)) return
+    const goal = soloGoals.find(g => g.id === goalId)
+    if (goal && hasCheckedInToday(goal)) return
+
+    setLoggingSoloGoalIds(prev => {
+      const next = new Set(prev)
+      next.add(goalId)
+      return next
+    })
+
+    try {
+      addCheckinToSoloGoal(goalId)
+      const updated = getSoloGoals()
+      setSoloGoals(updated)
+    } finally {
+      setLoggingSoloGoalIds(prev => {
+        const done = new Set(prev)
+        done.delete(goalId)
+        return done
+      })
+    }
+  }
+
+  const handleGroupLog = async (goal: Goal & { participants: Participant[] }) => {
+    if (!isSupabaseConfigured() || !supabase || !userIdentity) return
+    if (loggingGroupGoalIds.has(goal.id)) return
+
+    const participant = goal.participants.find(p => p.nickname === userIdentity.nickname)
+    if (!participant) return
+
+    setLoggingGroupGoalIds(prev => {
+      const start = new Set(prev)
+      start.add(goal.id)
+      return start
+    })
+
+    const today = getTodayDate()
+    try {
+      const { error } = await supabase
+        .from('checkins')
+        .insert({
+          goal_id: goal.id,
+          participant_id: participant.id,
+          checkin_date: today,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        })
+
+      // Ignore unique violation errors (already checked in)
+      if (error && (error as any).code !== '23505') {
+        throw error
+      }
+
+      // Refresh today's check-ins for this goal and update group streak if needed
+      const { data: todaysCheckins } = await supabase
+        .from('checkins')
+        .select('*')
+        .eq('goal_id', goal.id)
+        .eq('checkin_date', today)
+
+      await checkAndUpdateGroupStreak(goal.id, goal.participants, todaysCheckins || [])
+
+      setGroupCheckedTodayGoalIds(prev => {
+        const checked = new Set(prev)
+        checked.add(goal.id)
+        return checked
+      })
+    } catch (e) {
+      console.error('Error checking in:', e)
+      alert('Failed to check in. Please try again.')
+    } finally {
+      setLoggingGroupGoalIds(prev => {
+        const done = new Set(prev)
+        done.delete(goal.id)
+        return done
+      })
+    }
+  }
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center px-4">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-zinc-900 dark:to-zinc-800 flex items-center justify-center px-4">
         <div className="text-center">
           <div className="text-4xl mb-4">🎯</div>
           <div className="text-lg text-gray-600">Loading Yuno...</div>
@@ -118,7 +235,7 @@ export default function HomePage() {
 
   if (!userIdentity) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-zinc-900 dark:to-zinc-800 flex items-center justify-center p-4">
         <Card className="w-full max-w-md mx-auto">
           <CardHeader className="text-center">
             <div className="text-6xl mb-4">🎯</div>
@@ -145,15 +262,15 @@ export default function HomePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-zinc-900 dark:to-zinc-800">
       <div className="container mx-auto px-4 py-4 sm:py-8">
         {/* Mobile Header */}
         <div className="flex items-center justify-between mb-6 sm:mb-8">
           <div className="flex items-center gap-2 sm:gap-3">
-            <div className="text-2xl sm:text-3xl">🎯</div>
+            <div className="text-2xl sm:text-3xl">🌱</div>
             <div>
-              <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Yuno</h1>
-              <p className="text-xs sm:text-sm text-gray-600 truncate max-w-[150px] sm:max-w-none">
+              <h1 className="text-xl sm:text-2xl font-bold text-foreground">Yuno</h1>
+              <p className="text-xs sm:text-sm text-muted-foreground truncate max-w-[150px] sm:max-w-none">
                 Hey {userIdentity.emoji} {userIdentity.nickname}!
               </p>
             </div>
@@ -161,20 +278,57 @@ export default function HomePage() {
           
           {/* Desktop Navigation */}
           <div className="hidden sm:flex gap-2">
-            <Link href="/create">
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={isTogglingTheme}
+              onClick={() => {
+                if (isTogglingTheme || isDarkVisual === null) return
+                setIsTogglingTheme(true)
+                const targetIsDark = !isDarkVisual
+                setVisualIsDark(targetIsDark)
+                window.setTimeout(() => {
+                  document.documentElement.classList.add('theme-transition')
+                  setTheme(targetIsDark ? 'dark' : 'light')
+                  window.setTimeout(() => {
+                    document.documentElement.classList.remove('theme-transition')
+                    setIsTogglingTheme(false)
+                  }, 500)
+                }, 400)
+              }}
+            >
+              <span className="relative w-4 h-4 mr-2 inline-block">
+                <Sun
+                  className={`absolute inset-0 transition-all duration-500 ease-in-out ${
+                    isDarkVisual
+                      ? 'opacity-100 rotate-0 scale-100'
+                      : 'opacity-0 -rotate-90 scale-75'
+                  }`}
+                />
+                <Moon
+                  className={`absolute inset-0 transition-all duration-500 ease-in-out ${
+                    isDarkVisual
+                      ? 'opacity-0 rotate-90 scale-75'
+                      : 'opacity-100 rotate-0 scale-100'
+                  }`}
+                />
+              </span>
+              Toggle Theme
+            </Button>
+            <Link href="/create" prefetch={false}>
               <Button>
                 <Plus className="w-4 h-4 mr-2" />
                 Create Goal
               </Button>
             </Link>
-            <Link href="/join">
-              <Button variant="outline">
+            <Link href="/join" prefetch={false}>
+              <Button variant="secondary">
                 <Users className="w-4 h-4 mr-2" />
                 Join Goal
               </Button>
             </Link>
-            <Link href="/profile">
-              <Button variant="ghost" size="sm">
+            <Link href="/profile" prefetch={false}>
+              <Button variant="secondary" size="sm">
                 <User className="w-4 h-4 mr-2" />
                 Profile
               </Button>
@@ -186,49 +340,108 @@ export default function HomePage() {
             variant="ghost"
             size="sm"
             className="sm:hidden"
+            aria-label="Toggle menu"
+            aria-expanded={showMobileMenu}
             onClick={() => setShowMobileMenu(!showMobileMenu)}
           >
-            {showMobileMenu ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            <span className="relative inline-block w-6 h-4">
+              <span
+                className={`absolute left-0 top-0 block h-[2px] w-6 bg-foreground transition-transform duration-300 ease-in-out ${
+                  showMobileMenu ? 'translate-y-[7px] rotate-45' : ''
+                }`}
+              />
+              <span
+                className={`absolute left-0 top-1/2 -translate-y-1/2 block h-[2px] w-6 bg-foreground transition-all duration-300 ease-in-out ${
+                  showMobileMenu ? 'opacity-0 scale-x-0' : 'opacity-100 scale-x-100'
+                }`}
+              />
+              <span
+                className={`absolute left-0 bottom-0 block h-[2px] w-6 bg-foreground transition-transform duration-300 ease-in-out ${
+                  showMobileMenu ? '-translate-y-[7px] -rotate-45' : ''
+                }`}
+              />
+            </span>
           </Button>
         </div>
 
-        {/* Mobile Navigation Menu */}
-        {showMobileMenu && (
-          <Card className="mb-6 sm:hidden">
-            <CardContent className="p-4">
-              <div className="flex flex-col gap-2">
-                <Link href="/create" onClick={() => setShowMobileMenu(false)}>
-                  <Button className="w-full justify-start">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Create Goal
-                  </Button>
-                </Link>
-                <Link href="/join" onClick={() => setShowMobileMenu(false)}>
-                  <Button variant="outline" className="w-full justify-start">
-                    <Users className="w-4 h-4 mr-2" />
-                    Join Goal
-                  </Button>
-                </Link>
-                <Link href="/profile" onClick={() => setShowMobileMenu(false)}>
-                  <Button variant="ghost" className="w-full justify-start">
-                    <User className="w-4 h-4 mr-2" />
-                    Profile
-                  </Button>
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+          {/* Mobile Navigation Menu (expands in-flow to push content down) */}
+          <div
+            className={`sm:hidden grid transition-all duration-200 ease-out ${
+              showMobileMenu ? 'grid-rows-[1fr] opacity-100 mb-6' : 'grid-rows-[0fr] opacity-0 mb-0'
+            }`}
+            aria-hidden={!showMobileMenu}
+          >
+            <div className="overflow-hidden">
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex flex-col gap-2">
+                    <Button
+                      variant="secondary"
+                      className="w-full justify-start"
+                      disabled={isTogglingTheme}
+                      onClick={() => {
+                        if (isTogglingTheme || isDarkVisual === null) return
+                        setIsTogglingTheme(true)
+                        const targetIsDark = !isDarkVisual
+                        setVisualIsDark(targetIsDark)
+                        window.setTimeout(() => {
+                          document.documentElement.classList.add('theme-transition')
+                          setTheme(targetIsDark ? 'dark' : 'light')
+                          window.setTimeout(() => {
+                            document.documentElement.classList.remove('theme-transition')
+                            setIsTogglingTheme(false)
+                          }, 500)
+                        }, 400)
+                      }}
+                    >
+                      <span className="relative w-4 h-4 mr-2 inline-block">
+                        <Sun
+                          className={`absolute inset-0 transition-all duration-500 ease-in-out ${
+                            isDarkVisual ? 'opacity-100 rotate-0 scale-100' : 'opacity-0 -rotate-90 scale-75'
+                          }`}
+                        />
+                        <Moon
+                          className={`absolute inset-0 transition-all duration-500 ease-in-out ${
+                            isDarkVisual ? 'opacity-0 rotate-90 scale-75' : 'opacity-100 rotate-0 scale-100'
+                          }`}
+                        />
+                      </span>
+                      Toggle Theme
+                    </Button>
+                    <Link href="/create" prefetch={false} onClick={() => setShowMobileMenu(false)}>
+                      <Button className="w-full justify-start">
+                        <Plus className="w-4 h-4 mr-2" />
+                        Create Goal
+                      </Button>
+                    </Link>
+                    <Link href="/join" prefetch={false} onClick={() => setShowMobileMenu(false)}>
+                      <Button variant="secondary" className="w-full justify-start">
+                        <Users className="w-4 h-4 mr-2" />
+                        Join Goal
+                      </Button>
+                    </Link>
+                    <Link href="/profile" prefetch={false} onClick={() => setShowMobileMenu(false)}>
+                      <Button variant="secondary" className="w-full justify-start">
+                        <User className="w-4 h-4 mr-2" />
+                        Profile
+                      </Button>
+                    </Link>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
 
         {/* Goals Grid */}
         <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-          {/* Solo Goals */}
+          {/* Solo Goals */
+          }
           {soloGoals.map((goal) => {
             const streak = calculateStreak(goal.checkins)
             const checkedInToday = hasCheckedInToday(goal)
             
             return (
-              <Link key={goal.id} href={`/goal/${goal.id}`}>
+              <Link key={goal.id} href={`/goal/${goal.id}`} prefetch={false}>
                 <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
@@ -236,18 +449,46 @@ export default function HomePage() {
                         <span className="text-2xl">{goal.emoji || '🎯'}</span>
                         <CardTitle className="text-base sm:text-lg truncate pr-2">{goal.name}</CardTitle>
                       </div>
-                      <Badge variant="secondary" className="shrink-0">
-                        <User className="w-3 h-3 mr-1" />
-                        Solo
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary" className="shrink-0">
+                          <User className="w-3 h-3 mr-1" />
+                          Solo
+                        </Badge>
+                        <Button
+                          size="sm"
+                          variant={checkedInToday ? 'secondary' : 'default'}
+                          disabled={checkedInToday || loggingSoloGoalIds.has(goal.id)}
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            handleSoloLog(goal.id)
+                          }}
+                        >
+                          {checkedInToday ? 'Logged' : 'Log'}
+                        </Button>
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent className="pt-0">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Flame className="w-4 h-4 text-orange-500" />
-                        <span className="font-semibold text-sm sm:text-base">{streak} day streak</span>
-                      </div>
+                    <div className="flex items-center gap-2">
+                      <Flame
+                        className={`w-4 h-4 ${
+                          streak > 0
+                            ? (checkedInToday
+                                ? 'text-orange-500'
+                                : 'text-gray-400 dark:text-gray-500')
+                            : 'text-gray-300 dark:text-gray-600'
+                        }`}
+                      />
+                      <span
+                        className={`font-semibold text-sm sm:text-base ${
+                          streak > 0 && checkedInToday ? 'text-orange-600 dark:text-orange-400' : ''
+                        }`}
+                      >
+                        {streak} day streak
+                      </span>
+                    </div>
                       <div className="text-xl sm:text-2xl">
                         {checkedInToday ? '✅' : '⏰'}
                       </div>
@@ -264,7 +505,7 @@ export default function HomePage() {
             const groupStreak = calculateGroupStreak(groupStreakDates)
             
             return (
-              <Link key={goal.id} href={`/goal/${goal.id}`}>
+              <Link key={goal.id} href={`/goal/${goal.id}`} prefetch={false}>
                 <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
@@ -272,18 +513,48 @@ export default function HomePage() {
                         <span className="text-2xl">{goal.emoji || '🎯'}</span>
                         <CardTitle className="text-base sm:text-lg truncate pr-2">{goal.name}</CardTitle>
                       </div>
-                      <Badge variant="secondary" className="shrink-0">
-                        <Users className="w-3 h-3 mr-1" />
-                        Group
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary" className="shrink-0">
+                          <Users className="w-3 h-3 mr-1" />
+                          Group
+                        </Badge>
+                        <Button
+                          size="sm"
+                          variant={groupCheckedTodayGoalIds.has(goal.id) ? 'secondary' : 'default'}
+                          disabled={groupCheckedTodayGoalIds.has(goal.id) || loggingGroupGoalIds.has(goal.id)}
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            handleGroupLog(goal)
+                          }}
+                        >
+                          {groupCheckedTodayGoalIds.has(goal.id) ? 'Logged' : 'Log'}
+                        </Button>
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent className="pt-0">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Flame className="w-4 h-4 text-orange-500" />
-                        <span className="font-semibold text-sm sm:text-base">{groupStreak} day streak</span>
-                      </div>
+                    <div className="flex items-center gap-2">
+                      <Flame
+                        className={`w-4 h-4 ${
+                          groupStreak > 0
+                            ? (groupCheckedTodayGoalIds.has(goal.id)
+                                ? 'text-orange-500'
+                                : 'text-gray-400 dark:text-gray-500')
+                            : 'text-gray-300 dark:text-gray-600'
+                        }`}
+                      />
+                      <span
+                        className={`font-semibold text-sm sm:text-base ${
+                          groupStreak > 0 && groupCheckedTodayGoalIds.has(goal.id)
+                            ? 'text-orange-600 dark:text-orange-400'
+                            : ''
+                        }`}
+                      >
+                        {groupStreak} day streak
+                      </span>
+                    </div>
                       <div className="flex -space-x-1">
                         {goal.participants.slice(0, 3).map((participant) => (
                           <div
@@ -318,13 +589,13 @@ export default function HomePage() {
                 Create your first goal or join a friend's goal to get started!
               </CardDescription>
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center max-w-sm mx-auto">
-                <Link href="/create" className="flex-1">
+                <Link href="/create" prefetch={false} className="flex-1">
                   <Button className="w-full">
                     <Plus className="w-4 h-4 mr-2" />
                     Create Goal
                   </Button>
                 </Link>
-                <Link href="/join" className="flex-1">
+                <Link href="/join" prefetch={false} className="flex-1">
                   <Button variant="outline" className="w-full">
                     <Users className="w-4 h-4 mr-2" />
                     Join Goal

@@ -121,3 +121,21 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Smooth theme change transitions */
+/* Limit transition scope and duration to reduce input delay during theme toggles */
+.theme-transition body {
+  transition-property: background-color, color, border-color;
+  transition-duration: 150ms;
+  transition-timing-function: ease-in-out;
+}
+
+/* Removed global fade wrapper to avoid flashing backgrounds on theme switch */
+
+@media (prefers-reduced-motion: reduce) {
+  .theme-transition *,
+  .theme-transition *::before,
+  .theme-transition *::after {
+    transition: none !important;
+  }
+}

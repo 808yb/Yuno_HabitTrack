@@ -29,7 +29,7 @@ export default function SetupPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-zinc-900 dark:to-zinc-800 flex items-center justify-center p-4">
       <Card className="w-full max-w-md mx-auto">
         <CardHeader className="text-center">
           <div className="text-4xl sm:text-6xl mb-4">🎯</div>

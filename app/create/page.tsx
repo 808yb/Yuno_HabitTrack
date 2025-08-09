@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -32,10 +32,13 @@ export default function CreateGoalPage() {
 
   const userIdentity = getUserIdentity()
 
-  if (!userIdentity) {
-    router.push("/setup")
-    return null
-  }
+  useEffect(() => {
+    if (!userIdentity) {
+      router.replace("/setup")
+    }
+  }, [userIdentity, router])
+
+  if (!userIdentity) return null
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -101,7 +104,7 @@ export default function CreateGoalPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-zinc-900 dark:to-zinc-800 p-4">
       <div className="container mx-auto max-w-md">
         <div className="mb-6">
           <Link href="/">

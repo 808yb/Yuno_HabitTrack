@@ -227,7 +227,7 @@ export default function GoalPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-zinc-900 dark:to-zinc-800 flex items-center justify-center">
         <div className="text-center">
           <div className="text-4xl mb-4">🎯</div>
           <div className="text-lg text-gray-600">Loading goal...</div>
@@ -241,7 +241,7 @@ export default function GoalPage() {
     const checkedInToday = hasCheckedInToday(soloGoal)
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-zinc-900 dark:to-zinc-800 p-4">
         <div className="container mx-auto max-w-2xl">
           <div className="mb-6 flex items-center justify-between">
             <Link href="/">
@@ -260,36 +260,42 @@ export default function GoalPage() {
             </Button>
           </div>
 
-          {/* Goal Management Panel */}
-          {showManagement && (
-            <Card className="mb-6">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Settings className="w-5 h-5" />
-                  Goal Settings
-                </CardTitle>
-                <CardDescription>
-                  Customize your goal settings
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <GoalManagement
-                  goalId={goalId}
-                  goalName={soloGoal.name}
-                  goalEmoji={soloGoal.emoji || '🎯'}
-                  isSoloGoal={true}
-                  onUpdate={() => {
-                    // Refresh solo goal data
-                    const updatedGoals = getSoloGoals()
-                    const updatedGoal = updatedGoals.find(g => g.id === goalId)
-                    if (updatedGoal) {
-                      setSoloGoal(updatedGoal)
-                    }
-                  }}
-                />
-              </CardContent>
-            </Card>
-          )}
+          {/* Goal Management Panel (animated) */}
+          <div
+            className={`grid transition-all duration-300 ease-out ${
+              showManagement ? "grid-rows-[1fr] opacity-100 mb-6" : "grid-rows-[0fr] opacity-0 mb-0"
+            }`}
+            aria-hidden={!showManagement}
+          >
+            <div className="overflow-hidden">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Settings className="w-5 h-5" />
+                    Goal Settings
+                  </CardTitle>
+                  <CardDescription>
+                    Customize your goal settings
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <GoalManagement
+                    goalId={goalId}
+                    goalName={soloGoal.name}
+                    goalEmoji={soloGoal.emoji || '🎯'}
+                    isSoloGoal={true}
+                    onUpdate={() => {
+                      const updatedGoals = getSoloGoals()
+                      const updatedGoal = updatedGoals.find(g => g.id === goalId)
+                      if (updatedGoal) {
+                        setSoloGoal(updatedGoal)
+                      }
+                    }}
+                  />
+                </CardContent>
+              </Card>
+            </div>
+          </div>
 
           <Card className="mb-6">
             <CardHeader>
@@ -313,17 +319,27 @@ export default function GoalPage() {
               <div className="grid grid-cols-2 gap-4 mb-6">
                 <div className="text-center">
                   <div className="flex items-center justify-center gap-2 mb-2">
-                    <Flame className="w-5 h-5 text-orange-500" />
-                    <span className="text-2xl font-bold">{streak}</span>
+                    <Flame
+                      className={`w-5 h-5 ${
+                        streak > 0
+                          ? (checkedInToday
+                              ? 'text-orange-500'
+                              : 'text-gray-400 dark:text-gray-500')
+                          : 'text-gray-300 dark:text-gray-600'
+                      }`}
+                    />
+                    <span className={`text-2xl font-bold ${
+                      streak > 0 && checkedInToday ? 'text-orange-600 dark:text-orange-400' : ''
+                    }`}>{streak}</span>
                   </div>
-                  <p className="text-sm text-gray-600">Day Streak</p>
+                  <p className="text-sm text-gray-600 dark:text-white">Day Streak</p>
                 </div>
                 <div className="text-center">
                   <div className="flex items-center justify-center gap-2 mb-2">
                     <Calendar className="w-5 h-5 text-blue-500" />
                     <span className="text-2xl font-bold">{soloGoal.checkins.length}</span>
                   </div>
-                  <p className="text-sm text-gray-600">Total Check-ins</p>
+                  <p className="text-sm text-gray-600 dark:text-white">Total Check-ins</p>
                 </div>
               </div>
 
@@ -334,7 +350,7 @@ export default function GoalPage() {
                     <p className="text-lg font-semibold text-green-600">
                       Checked in for today!
                     </p>
-                    <p className="text-sm text-gray-600">
+                    <p className="text-sm text-gray-600 dark:text-white">
                       Come back tomorrow to continue your streak.
                     </p>
                   </div>
@@ -388,7 +404,7 @@ export default function GoalPage() {
 
   if (!groupGoal) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-zinc-900 dark:to-zinc-800 flex items-center justify-center">
         <div className="text-center">
           <div className="text-4xl mb-4">❌</div>
           <div className="text-lg text-gray-600">Goal not found</div>
@@ -407,7 +423,7 @@ export default function GoalPage() {
   const groupStreak = calculateGroupStreak(groupStreakDates)
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-zinc-900 dark:to-zinc-800 p-4">
       <div className="container mx-auto max-w-2xl">
         <div className="mb-6 flex items-center justify-between">
           <Link href="/">
@@ -426,32 +442,38 @@ export default function GoalPage() {
           </Button>
         </div>
 
-        {/* Goal Management Panel */}
-        {showManagement && (
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Settings className="w-5 h-5" />
-                Goal Settings
-              </CardTitle>
-              <CardDescription>
-                Customize your goal settings
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <GoalManagement
-                goalId={goalId}
-                goalName={groupGoal.name}
-                goalEmoji={groupGoal.emoji || '🎯'}
-                isSoloGoal={false}
-                onUpdate={() => {
-                  // Reload goal data
-                  loadGoal()
-                }}
-              />
-            </CardContent>
-          </Card>
-        )}
+        {/* Goal Management Panel (animated) */}
+        <div
+          className={`grid transition-all duration-300 ease-out ${
+            showManagement ? "grid-rows-[1fr] opacity-100 mb-6" : "grid-rows-[0fr] opacity-0 mb-0"
+          }`}
+          aria-hidden={!showManagement}
+        >
+          <div className="overflow-hidden">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Settings className="w-5 h-5" />
+                  Goal Settings
+                </CardTitle>
+                <CardDescription>
+                  Customize your goal settings
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <GoalManagement
+                  goalId={goalId}
+                  goalName={groupGoal.name}
+                  goalEmoji={groupGoal.emoji || '🎯'}
+                  isSoloGoal={false}
+                  onUpdate={() => {
+                    loadGoal()
+                  }}
+                />
+              </CardContent>
+            </Card>
+          </div>
+        </div>
 
         <Card className="mb-6">
           <CardHeader>
@@ -475,17 +497,27 @@ export default function GoalPage() {
             <div className="grid grid-cols-2 gap-4 mb-6">
               <div className="text-center">
                 <div className="flex items-center justify-center gap-2 mb-2">
-                  <Flame className="w-5 h-5 text-orange-500" />
-                  <span className="text-2xl font-bold">{groupStreak}</span>
+                  <Flame
+                    className={`w-5 h-5 ${
+                      groupStreak > 0
+                        ? (userHasCheckedInToday
+                            ? 'text-orange-500'
+                            : 'text-gray-400 dark:text-gray-500')
+                        : 'text-gray-300 dark:text-gray-600'
+                    }`}
+                  />
+                  <span className={`text-2xl font-bold ${
+                    groupStreak > 0 && userHasCheckedInToday ? 'text-orange-600 dark:text-orange-400' : ''
+                  }`}>{groupStreak}</span>
                 </div>
-                <p className="text-sm text-gray-600">Group Streak</p>
+                <p className="text-sm text-gray-600 dark:text-white">Group Streak</p>
               </div>
               <div className="text-center">
                 <div className="flex items-center justify-center gap-2 mb-2">
                   <Users className="w-5 h-5 text-blue-500" />
                   <span className="text-2xl font-bold">{participants.length}/{groupGoal.max_participants}</span>
                 </div>
-                <p className="text-sm text-gray-600">Members</p>
+                <p className="text-sm text-gray-600 dark:text-white">Members</p>
               </div>
             </div>
             

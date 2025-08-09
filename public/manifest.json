@@ -9,9 +9,9 @@
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "/yuno512.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/yuno512.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "any"
     },
     {

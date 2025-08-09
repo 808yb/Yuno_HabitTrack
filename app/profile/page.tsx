@@ -153,7 +153,7 @@ export default function ProfilePage() {
 
   if (!userIdentity) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center px-4">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-zinc-900 dark:to-zinc-800 flex items-center justify-center px-4">
         <div className="text-center">
           <div className="text-4xl mb-4">🎯</div>
           <div className="text-lg text-gray-600">Loading profile...</div>
@@ -166,7 +166,7 @@ export default function ProfilePage() {
   const totalCheckins = soloGoals.reduce((sum, goal) => sum + goal.checkins.length, 0)
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-zinc-900 dark:to-zinc-800 p-4">
       <div className="container mx-auto max-w-2xl">
         <div className="mb-6">
           <Link href="/">
