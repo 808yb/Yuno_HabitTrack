@@ -15,7 +15,9 @@ interface FirstHabitOnboardingProps {
   userIdentity: UserIdentity
 }
 
-const HABIT_SUGGESTIONS = [
+type HabitSuggestion = { name: string; emoji: string }
+
+const HABIT_SUGGESTIONS: HabitSuggestion[] = [
   { name: "Daily Exercise", emoji: "🏋️‍♂️" },
   { name: "Read 30 minutes", emoji: "📚" },
   { name: "Drink 8 glasses of water", emoji: "💧" },
@@ -36,17 +38,21 @@ export function FirstHabitOnboarding({ onComplete, userIdentity }: FirstHabitOnb
   const [step, setStep] = useState(1)
   const [habitName, setHabitName] = useState("")
   const [selectedSuggestion, setSelectedSuggestion] = useState("")
+  const [selectedSuggestionObj, setSelectedSuggestionObj] = useState<HabitSuggestion | null>(null)
   const [selectedEmoji, setSelectedEmoji] = useState("🎯")
   const [loading, setLoading] = useState(false)
   const router = useRouter()
 
-  const handleSuggestionSelect = (suggestion: string) => {
-    setSelectedSuggestion(suggestion)
-    setHabitName(suggestion)
+  const handleSuggestionSelect = (suggestion: HabitSuggestion) => {
+    setSelectedSuggestion(suggestion.name)
+    setSelectedSuggestionObj(suggestion)
+    setHabitName(suggestion.name)
+    setSelectedEmoji(suggestion.emoji)
   }
 
   const handleCustomHabit = () => {
     setSelectedSuggestion("")
+    setSelectedSuggestionObj(null)
     setHabitName("")
     setStep(2)
   }
@@ -57,12 +63,13 @@ export function FirstHabitOnboarding({ onComplete, userIdentity }: FirstHabitOnb
     setLoading(true)
 
     try {
+      const emojiToUse = selectedSuggestionObj?.emoji ?? selectedEmoji
       const goal = addSoloGoal({
         name: habitName.trim(),
         type: "solo",
         duration_days: null,
         checkins: [],
-        emoji: selectedEmoji
+        emoji: emojiToUse
       })
       
       // Navigate to the new goal
@@ -81,7 +88,7 @@ export function FirstHabitOnboarding({ onComplete, userIdentity }: FirstHabitOnb
 
   if (step === 1) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-zinc-900 dark:to-zinc-800 flex items-center justify-center p-4">
         <Card className="w-full max-w-2xl mx-auto">
           <CardHeader className="text-center">
             <div className="text-4xl sm:text-6xl mb-4">🎉</div>
@@ -101,11 +108,11 @@ export function FirstHabitOnboarding({ onComplete, userIdentity }: FirstHabitOnb
                 {HABIT_SUGGESTIONS.map((habit) => (
                   <button
                     key={habit.name}
-                    onClick={() => handleSuggestionSelect(habit.name)}
+                    onClick={() => handleSuggestionSelect(habit)}
                     className={`p-4 rounded-lg border-2 transition-all text-left hover:shadow-md ${
                       selectedSuggestion === habit.name
-                        ? 'border-blue-500 bg-blue-50'
-                        : 'border-gray-200 hover:border-gray-300'
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-600'
+                        : 'border-gray-200 hover:border-gray-300 dark:border-zinc-700 dark:hover:border-zinc-600'
                     }`}
                   >
                     <div className="flex items-center gap-3">
@@ -139,8 +146,8 @@ export function FirstHabitOnboarding({ onComplete, userIdentity }: FirstHabitOnb
             </div>
 
             {/* Encouragement */}
-            <div className="text-center p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-              <p className="text-sm text-yellow-800">
+            <div className="text-center p-4 bg-yellow-50 dark:bg-zinc-800 rounded-lg border border-yellow-200 dark:border-zinc-700">
+              <p className="text-sm text-yellow-800 dark:text-yellow-300">
                 <strong>💡 Tip:</strong> Start small! Even 5 minutes a day can build a powerful habit.
               </p>
             </div>
@@ -152,7 +159,7 @@ export function FirstHabitOnboarding({ onComplete, userIdentity }: FirstHabitOnb
 
   if (step === 2) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-zinc-900 dark:to-zinc-800 flex items-center justify-center p-4">
         <Card className="w-full max-w-md mx-auto">
           <CardHeader className="text-center">
             <div className="text-4xl sm:text-6xl mb-4">✨</div>
@@ -185,8 +192,8 @@ export function FirstHabitOnboarding({ onComplete, userIdentity }: FirstHabitOnb
                     onClick={() => setSelectedEmoji(emoji)}
                     className={`p-2 text-xl rounded transition-all flex items-center justify-center ${
                       selectedEmoji === emoji 
-                        ? 'bg-blue-100 border-2 border-blue-300 shadow-md scale-110' 
-                        : 'hover:bg-gray-50 hover:scale-105'
+                        ? 'bg-blue-100 dark:bg-blue-950/30 border-2 border-blue-300 dark:border-blue-700 shadow-md scale-110' 
+                        : 'hover:bg-gray-50 dark:hover:bg-zinc-800 hover:scale-105'
                     }`}
                   >
                     {emoji}
@@ -216,16 +223,16 @@ export function FirstHabitOnboarding({ onComplete, userIdentity }: FirstHabitOnb
             </div>
 
             {/* Examples */}
-            <div className="text-center p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-200">
-              <p className="text-sm text-purple-800 mb-3 font-semibold">
+            <div className="text-center p-4 bg-gradient-to-r from-purple-50 to-pink-50 dark:bg-zinc-800 rounded-lg border border-purple-200 dark:border-zinc-700">
+              <p className="text-sm text-purple-800 dark:text-purple-300 mb-3 font-semibold">
                 💡 Try these examples:
               </p>
               <div className="flex flex-wrap gap-2 justify-center">
                 {[
-                  { text: "Morning yoga", color: "bg-green-100 text-green-800 border-green-300" },
-                  { text: "Learn Spanish", color: "bg-blue-100 text-blue-800 border-blue-300" },
-                  { text: "No social media", color: "bg-red-100 text-red-800 border-red-300" },
-                  { text: "Drink green tea", color: "bg-emerald-100 text-emerald-800 border-emerald-300" }
+                  { text: "Morning yoga", color: "bg-green-100 text-green-800 border-green-300 dark:bg-emerald-950/20 dark:text-emerald-300 dark:border-emerald-700" },
+                  { text: "Learn Spanish", color: "bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-950/20 dark:text-blue-300 dark:border-blue-700" },
+                  { text: "No social media", color: "bg-red-100 text-red-800 border-red-300 dark:bg-red-950/20 dark:text-red-300 dark:border-red-700" },
+                  { text: "Drink green tea", color: "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/20 dark:text-emerald-300 dark:border-emerald-700" }
                 ].map((example) => (
                   <button
                     key={example.text}

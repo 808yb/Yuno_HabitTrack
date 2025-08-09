@@ -564,12 +564,12 @@ export default function GoalPage() {
               {participants.map((participant) => {
                 const hasCheckedIn = todayCheckins.some(c => c.participant_id === participant.id)
                 return (
-                  <div key={participant.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div key={participant.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-zinc-800 rounded-lg">
                     <div className="flex items-center gap-3">
                       <div className="text-2xl">{participant.emoji}</div>
                       <div>
                         <p className="font-medium">{participant.nickname}</p>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
                           Joined {new Date(participant.joined_at).toLocaleDateString()}
                         </p>
                       </div>
