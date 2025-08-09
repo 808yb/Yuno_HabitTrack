@@ -48,10 +48,11 @@ export default function CreateGoalPage() {
     setLoading(true)
 
     try {
+      const limitedName = goalName.trim().slice(0, 10)
       if (goalType === "solo") {
         // Create solo goal locally
         const goal = addSoloGoal({
-          name: goalName.trim(),
+          name: limitedName,
           type: "solo",
           duration_days: duration === "unlimited" ? null : parseInt(duration),
           checkins: [],
@@ -70,7 +71,7 @@ export default function CreateGoalPage() {
         const { data: goal, error: goalError } = await supabase
           .from('goals')
           .insert({
-            name: goalName.trim(),
+            name: limitedName,
             type: 'coop',
             max_participants: parseInt(maxParticipants),
             duration_days: duration === "unlimited" ? null : parseInt(duration),
@@ -133,7 +134,7 @@ export default function CreateGoalPage() {
                   placeholder="e.g., Daily Exercise, Read 30 minutes"
                   value={goalName}
                   onChange={(e) => setGoalName(e.target.value)}
-                  maxLength={50}
+                  maxLength={25}
                   className="text-base"
                   required
                   autoFocus

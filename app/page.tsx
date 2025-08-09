@@ -445,31 +445,32 @@ export default function HomePage() {
                 <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
                         <span className="text-2xl">{goal.emoji || '🎯'}</span>
                         <CardTitle className="text-base sm:text-lg truncate pr-2">{goal.name}</CardTitle>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="secondary" className="shrink-0">
-                          <User className="w-3 h-3 mr-1" />
-                          Solo
-                        </Badge>
-                        <Button
-                          size="sm"
-                          variant={checkedInToday ? 'secondary' : 'default'}
-                          disabled={checkedInToday || loggingSoloGoalIds.has(goal.id)}
-                          onClick={(e) => {
-                            e.preventDefault()
-                            e.stopPropagation()
-                            handleSoloLog(goal.id)
-                          }}
-                        >
-                          {checkedInToday ? 'Logged' : 'Log'}
-                        </Button>
                       </div>
                     </div>
                   </CardHeader>
                   <CardContent className="pt-0">
+                    <div className="flex items-center justify-between mb-2">
+                      <Badge variant="secondary" className="shrink-0">
+                        <User className="w-3 h-3 mr-1" />
+                        Solo
+                      </Badge>
+                      <Button
+                        size="sm"
+                        variant={checkedInToday ? 'secondary' : 'default'}
+                        disabled={checkedInToday || loggingSoloGoalIds.has(goal.id)}
+                        className="shrink-0"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          handleSoloLog(goal.id)
+                        }}
+                      >
+                        {checkedInToday ? 'Logged' : 'Log'}
+                      </Button>
+                    </div>
                     <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Flame
@@ -509,31 +510,32 @@ export default function HomePage() {
                 <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
                         <span className="text-2xl">{goal.emoji || '🎯'}</span>
                         <CardTitle className="text-base sm:text-lg truncate pr-2">{goal.name}</CardTitle>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="secondary" className="shrink-0">
-                          <Users className="w-3 h-3 mr-1" />
-                          Group
-                        </Badge>
-                        <Button
-                          size="sm"
-                          variant={groupCheckedTodayGoalIds.has(goal.id) ? 'secondary' : 'default'}
-                          disabled={groupCheckedTodayGoalIds.has(goal.id) || loggingGroupGoalIds.has(goal.id)}
-                          onClick={(e) => {
-                            e.preventDefault()
-                            e.stopPropagation()
-                            handleGroupLog(goal)
-                          }}
-                        >
-                          {groupCheckedTodayGoalIds.has(goal.id) ? 'Logged' : 'Log'}
-                        </Button>
                       </div>
                     </div>
                   </CardHeader>
                   <CardContent className="pt-0">
+                    <div className="flex items-center justify-between mb-2">
+                      <Badge variant="secondary" className="shrink-0">
+                        <Users className="w-3 h-3 mr-1" />
+                        Group
+                      </Badge>
+                      <Button
+                        size="sm"
+                        variant={groupCheckedTodayGoalIds.has(goal.id) ? 'secondary' : 'default'}
+                        disabled={groupCheckedTodayGoalIds.has(goal.id) || loggingGroupGoalIds.has(goal.id)}
+                        className="shrink-0"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          handleGroupLog(goal)
+                        }}
+                      >
+                        {groupCheckedTodayGoalIds.has(goal.id) ? 'Logged' : 'Log'}
+                      </Button>
+                    </div>
                     <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Flame

@@ -41,9 +41,10 @@ export function GoalManagement({ goalId, goalName, goalEmoji, isSoloGoal, onUpda
     setIsUpdating(true)
     
     try {
+      const limitedName = newName.trim().slice(0, 10)
       if (isSoloGoal) {
         const { renameSoloGoal } = await import("@/lib/local-storage")
-        renameSoloGoal(goalId, newName.trim())
+        renameSoloGoal(goalId, limitedName)
       } else {
         if (!supabase || !isSupabaseConfigured()) {
           throw new Error("Supabase not configured")
@@ -51,7 +52,7 @@ export function GoalManagement({ goalId, goalName, goalEmoji, isSoloGoal, onUpda
         
         const { error } = await supabase
           .from('goals')
-          .update({ name: newName.trim() })
+          .update({ name: limitedName })
           .eq('id', goalId)
         
         if (error) throw error
@@ -162,6 +163,7 @@ export function GoalManagement({ goalId, goalName, goalEmoji, isSoloGoal, onUpda
                   onChange={(e) => setNewName(e.target.value)}
                   placeholder="Enter goal name"
                   className="mt-1"
+                  maxLength={10}
                 />
               </div>
             </div>

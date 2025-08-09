@@ -313,7 +313,7 @@ export default function ProfilePage() {
                 This will replace your current data. Make sure to export first!
               </p>
               <p className="text-xs text-right text-gray-500">
-                version 1.4
+                version 1.5
               </p>
             </div>
           </CardContent>
