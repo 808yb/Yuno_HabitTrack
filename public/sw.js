@@ -1,8 +1,7 @@
-const CACHE_NAME = 'yuno-habittrack-v2';
+const CACHE_NAME = 'yuno-habittrack-v3';
 const urlsToCache = [
-  '/',
+  // App shell HTML is no longer pre-cached to avoid stale UI.
   // Intentionally do not cache manifest or icons to avoid stale Home Screen
-  // Add other important assets here
 ];
 
 // Install event - cache resources
@@ -16,19 +15,44 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// Fetch event - serve from cache, fallback to network
+// Fetch event - prefer network for app shell and code, cache for static assets
 self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url);
+  const request = event.request;
+  const url = new URL(request.url);
+
   const isManifestOrIcon = url.pathname.endsWith('/manifest.json') || /\/yuno(180|512)\.png(\?.*)?$/.test(url.pathname + url.search);
   if (isManifestOrIcon) {
     // Always bypass cache for manifest and icons
     return;
   }
+
+  const isNavigation = request.mode === 'navigate' || request.destination === 'document';
+  const isAppCode = request.destination === 'script' || request.destination === 'style' || url.pathname.startsWith('/_next/');
+
+  if (isNavigation || isAppCode) {
+    // Network-first to avoid serving stale UI or code
+    event.respondWith(
+      fetch(request)
+        .then((networkResponse) => {
+          const copy = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+          return networkResponse;
+        })
+        .catch(() => caches.match(request))
+    );
+    return;
+  }
+
+  // Cache-first for other requests (images, fonts, etc.)
   event.respondWith(
-    caches.match(event.request)
-      .then((response) => {
-        return response || fetch(event.request);
-      })
+    caches.match(request).then((cached) => {
+      if (cached) return cached;
+      return fetch(request).then((networkResponse) => {
+        const copy = networkResponse.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+        return networkResponse;
+      });
+    })
   );
 });
 

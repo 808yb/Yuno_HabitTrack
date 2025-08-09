@@ -35,6 +35,11 @@ export function PWAUpdateNotifier() {
             })
           }
         })
+
+        // Proactively check for updates on load and then periodically
+        registration.update()
+        const interval = setInterval(() => registration.update(), 60 * 1000)
+        return () => clearInterval(interval)
       })
     }
   }, [])
