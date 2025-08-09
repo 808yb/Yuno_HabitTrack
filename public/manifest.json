@@ -9,13 +9,13 @@
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "/yuno512.png",
+      "src": "/yuno512.png?v=2",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/yuno180.png",
+      "src": "/yuno180.png?v=2",
       "sizes": "180x180",
       "type": "image/png",
       "purpose": "any"

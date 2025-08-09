@@ -6,10 +6,10 @@ import { PWAUpdateNotifier } from '@/components/pwa-update-notifier'
 import { ThemeProvider } from '@/components/theme-provider'
 
 export const metadata: Metadata = {
-  title: 'Yuno HabitTrack',
+  title: 'Yuno',
   description: 'Track your habits and goals with Yuno',
   generator: 'v0.dev',
-  manifest: '/manifest.json',
+  manifest: '/manifest.json?v=2',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
@@ -17,10 +17,10 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: '/yuno512.png', sizes: '512x512', type: 'image/png' },
+      { url: '/yuno512.png?v=2', sizes: '512x512', type: 'image/png' },
     ],
     apple: [
-      { url: '/yuno180.png', sizes: '180x180', type: 'image/png' },
+      { url: '/yuno180.png?v=2', sizes: '180x180', type: 'image/png' },
     ],
   },
 }
@@ -52,11 +52,14 @@ html {
         {/* Favicon and PWA Icons */}
         <meta name="apple-mobile-web-app-title" content="Yuno" />
         <meta name="application-name" content="Yuno" />
-        <link rel="icon" type="image/png" href="/yuno512.png" />
-        <link rel="apple-touch-icon" sizes="180x180" href="/yuno180.png" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <link rel="manifest" href="/manifest.json?v=2" />
+        <link rel="icon" type="image/png" href="/yuno512.png?v=2" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/yuno180.png?v=2" />
         {/* Extra iOS compatibility: a version without sizes */}
-        <link rel="apple-touch-icon" href="/yuno180.png" />
-        <link rel="shortcut icon" type="image/png" href="/yuno512.png" />
+        <link rel="apple-touch-icon" href="/yuno180.png?v=2" />
+        <link rel="apple-touch-icon-precomposed" href="/yuno180.png?v=2" />
+        <link rel="shortcut icon" type="image/png" href="/yuno512.png?v=2" />
         <script
           dangerouslySetInnerHTML={{
             __html: `

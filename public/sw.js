@@ -1,7 +1,7 @@
-const CACHE_NAME = 'yuno-habittrack-v1';
+const CACHE_NAME = 'yuno-habittrack-v2';
 const urlsToCache = [
   '/',
-  '/manifest.json',
+  // Intentionally do not cache manifest or icons to avoid stale Home Screen
   // Add other important assets here
 ];
 
@@ -18,10 +18,15 @@ self.addEventListener('install', (event) => {
 
 // Fetch event - serve from cache, fallback to network
 self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+  const isManifestOrIcon = url.pathname.endsWith('/manifest.json') || /\/yuno(180|512)\.png(\?.*)?$/.test(url.pathname + url.search);
+  if (isManifestOrIcon) {
+    // Always bypass cache for manifest and icons
+    return;
+  }
   event.respondWith(
     caches.match(event.request)
       .then((response) => {
-        // Return cached version or fetch from network
         return response || fetch(event.request);
       })
   );
