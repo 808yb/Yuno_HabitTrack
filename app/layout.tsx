@@ -13,7 +13,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'Yuno HabitTrack',
+    title: 'Yuno',
   },
   icons: {
     icon: [
@@ -50,8 +50,12 @@ html {
 }
         `}</style>
         {/* Favicon and PWA Icons */}
+        <meta name="apple-mobile-web-app-title" content="Yuno" />
+        <meta name="application-name" content="Yuno" />
         <link rel="icon" type="image/png" href="/yuno512.png" />
         <link rel="apple-touch-icon" sizes="180x180" href="/yuno180.png" />
+        {/* Extra iOS compatibility: a version without sizes */}
+        <link rel="apple-touch-icon" href="/yuno180.png" />
         <link rel="shortcut icon" type="image/png" href="/yuno512.png" />
         <script
           dangerouslySetInnerHTML={{

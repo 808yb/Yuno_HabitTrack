@@ -1,6 +1,6 @@
 {
-  "name": "Yuno HabitTrack",
-  "short_name": "HabitTrack",
+  "name": "Yuno",
+  "short_name": "Yuno",
   "description": "Track your habits and goals with Yuno",
   "start_url": "/",
   "display": "standalone",
