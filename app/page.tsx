@@ -10,6 +10,7 @@ import { Plus, Users, User, Target, Flame, Menu, X, Sun, Moon } from 'lucide-rea
 import { useTheme } from "next-themes"
 import Link from "next/link"
 import { FirstHabitOnboarding } from "@/components/first-habit-onboarding"
+import Image from "next/image"
 
 export default function HomePage() {
   const { theme, setTheme, resolvedTheme } = useTheme()
@@ -267,7 +268,14 @@ export default function HomePage() {
         {/* Mobile Header */}
         <div className="flex items-center justify-between mb-6 sm:mb-8">
           <div className="flex items-center gap-2 sm:gap-3">
-            <div className="text-2xl sm:text-3xl">🌱</div>
+            <Image
+              src="/yuno180.png"
+              alt="Yuno"
+              width={32}
+              height={32}
+              className="w-6 h-6 sm:w-8 sm:h-8"
+              priority
+            />
             <div>
               <h1 className="text-xl sm:text-2xl font-bold text-foreground">Yuno</h1>
               <p className="text-xs sm:text-sm text-muted-foreground truncate max-w-[150px] sm:max-w-none">
