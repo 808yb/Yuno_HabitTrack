@@ -269,7 +269,7 @@ export default function HomePage() {
         <div className="flex items-center justify-between mb-6 sm:mb-8">
           <div className="flex items-center gap-2 sm:gap-3">
             <Image
-              src="/yuno180.png"
+              src="/yuno512.png"
               alt="Yuno"
               width={32}
               height={32}
