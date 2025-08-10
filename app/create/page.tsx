@@ -20,6 +20,7 @@ export default function CreateGoalPage() {
   const [duration, setDuration] = useState("unlimited")
   const [selectedEmoji, setSelectedEmoji] = useState("🎯")
   const [loading, setLoading] = useState(false)
+  const [isVisible, setIsVisible] = useState(false)
 
   const EMOJI_OPTIONS = [
     '🎯', '💪', '🏃‍♂️', '🧘‍♀️', '📚', '💻', '🎨', '🎵', '🍎', '💧',
@@ -37,6 +38,11 @@ export default function CreateGoalPage() {
       router.replace("/setup")
     }
   }, [userIdentity, router])
+
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setIsVisible(true))
+    return () => cancelAnimationFrame(raf)
+  }, [])
 
   if (!userIdentity) return null
 
@@ -105,7 +111,11 @@ export default function CreateGoalPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-zinc-900 dark:to-zinc-800 p-4">
+    <div
+      className={`min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-zinc-900 dark:to-zinc-800 p-4 transition-all duration-300 ease-out will-change-transform ${
+        isVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
+      }`}
+    >
       <div className="container mx-auto max-w-md">
         <div className="mb-6">
           <Link href="/">

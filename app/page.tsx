@@ -3,16 +3,21 @@
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { getUserIdentity, getSoloGoals, type UserIdentity, type SoloGoal, hasCheckedInToday, calculateStreak, calculateGroupStreak, addCheckinToSoloGoal, getTodayDate, checkAndUpdateGroupStreak } from "@/lib/local-storage"
+import { getUserIdentity, getSoloGoals, type UserIdentity, type SoloGoal, hasCheckedInToday, calculateStreak, calculateGroupStreak, addCheckinToSoloGoal, getTodayDate, checkAndUpdateGroupStreak, deleteSoloGoal, addSoloGoal } from "@/lib/local-storage"
 import { supabase, type Goal, type Participant, type GroupStreak, isSupabaseConfigured } from "@/lib/supabase"
-import { Plus, Users, User, Target, Flame, Menu, X, Sun, Moon } from 'lucide-react'
+import { Plus, Users, User, Target, Flame, Menu, X, Sun, Moon, Check } from 'lucide-react'
 import { useTheme } from "next-themes"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { FirstHabitOnboarding } from "@/components/first-habit-onboarding"
 import Image from "next/image"
 
 export default function HomePage() {
+  const router = useRouter()
   const { theme, setTheme, resolvedTheme } = useTheme()
   const [visualIsDark, setVisualIsDark] = useState<boolean | null>(null)
   const [isTogglingTheme, setIsTogglingTheme] = useState(false)
@@ -29,6 +34,18 @@ export default function HomePage() {
   const [loggingSoloGoalIds, setLoggingSoloGoalIds] = useState<Set<string>>(new Set())
   const [loggingGroupGoalIds, setLoggingGroupGoalIds] = useState<Set<string>>(new Set())
   const [groupCheckedTodayGoalIds, setGroupCheckedTodayGoalIds] = useState<Set<string>>(new Set())
+  const [swipeGoalId, setSwipeGoalId] = useState<string | null>(null)
+  const [swipeStartX, setSwipeStartX] = useState<number | null>(null)
+  const [swipeOffsetX, setSwipeOffsetX] = useState<number>(0)
+  const [isSwiping, setIsSwiping] = useState<boolean>(false)
+  const [showCreateSheet, setShowCreateSheet] = useState(false)
+  const [quickGoalName, setQuickGoalName] = useState("")
+  const [quickSelectedEmoji, setQuickSelectedEmoji] = useState("🎯")
+  const [quickCreating, setQuickCreating] = useState(false)
+  const EMOJI_OPTIONS = [
+    '🎯', '💪', '🏃‍♂️', '🧘‍♀️', '📚', '💻', '🎨', '🎵', '🍎', '💧',
+    '😴', '🏋️‍♂️', '🚴‍♂️', '🏊‍♀️', '🧠', '💡', '⭐', '🔥', '💎', '🌟'
+  ]
 
   useEffect(() => {
     const identity = getUserIdentity()
@@ -168,6 +185,24 @@ export default function HomePage() {
     }
   }
 
+  const handleDeleteSoloGoal = (goalId: string) => {
+    const confirmDelete = window.confirm('Delete this goal? This cannot be undone.')
+    if (!confirmDelete) {
+      // Reset swipe state if user cancels
+      setSwipeGoalId(null)
+      setSwipeOffsetX(0)
+      setIsSwiping(false)
+      return
+    }
+    deleteSoloGoal(goalId)
+    const updated = getSoloGoals()
+    setSoloGoals(updated)
+    // Reset swipe state after deletion
+    setSwipeGoalId(null)
+    setSwipeOffsetX(0)
+    setIsSwiping(false)
+  }
+
   const handleGroupLog = async (goal: Goal & { participants: Participant[] }) => {
     if (!isSupabaseConfigured() || !supabase || !userIdentity) return
     if (loggingGroupGoalIds.has(goal.id)) return
@@ -286,6 +321,18 @@ export default function HomePage() {
           
           {/* Desktop Navigation */}
           <div className="hidden sm:flex gap-2">
+            <Link href="/create" prefetch={false}>
+              <Button>
+                <Plus className="w-4 h-4 mr-2" />
+                Create Goal
+              </Button>
+            </Link>
+            <Link href="/join" prefetch={false}>
+              <Button variant="secondary">
+                <Users className="w-4 h-4 mr-2" />
+                Join Goal
+              </Button>
+            </Link>
             <Button
               variant="secondary"
               size="sm"
@@ -323,18 +370,6 @@ export default function HomePage() {
               </span>
               Toggle Theme
             </Button>
-            <Link href="/create" prefetch={false}>
-              <Button>
-                <Plus className="w-4 h-4 mr-2" />
-                Create Goal
-              </Button>
-            </Link>
-            <Link href="/join" prefetch={false}>
-              <Button variant="secondary">
-                <Users className="w-4 h-4 mr-2" />
-                Join Goal
-              </Button>
-            </Link>
             <Link href="/profile" prefetch={false}>
               <Button variant="secondary" size="sm">
                 <User className="w-4 h-4 mr-2" />
@@ -383,6 +418,18 @@ export default function HomePage() {
               <Card>
                 <CardContent className="p-4">
                   <div className="flex flex-col gap-2">
+                    <Link href="/create" prefetch={false} onClick={() => setShowMobileMenu(false)}>
+                      <Button className="w-full justify-start">
+                        <Plus className="w-4 h-4 mr-2" />
+                        Create Goal
+                      </Button>
+                    </Link>
+                    <Link href="/join" prefetch={false} onClick={() => setShowMobileMenu(false)}>
+                      <Button variant="secondary" className="w-full justify-start">
+                        <Users className="w-4 h-4 mr-2" />
+                        Join Goal
+                      </Button>
+                    </Link>
                     <Button
                       variant="secondary"
                       className="w-full justify-start"
@@ -416,18 +463,6 @@ export default function HomePage() {
                       </span>
                       Toggle Theme
                     </Button>
-                    <Link href="/create" prefetch={false} onClick={() => setShowMobileMenu(false)}>
-                      <Button className="w-full justify-start">
-                        <Plus className="w-4 h-4 mr-2" />
-                        Create Goal
-                      </Button>
-                    </Link>
-                    <Link href="/join" prefetch={false} onClick={() => setShowMobileMenu(false)}>
-                      <Button variant="secondary" className="w-full justify-start">
-                        <Users className="w-4 h-4 mr-2" />
-                        Join Goal
-                      </Button>
-                    </Link>
                     <Link href="/profile" prefetch={false} onClick={() => setShowMobileMenu(false)}>
                       <Button variant="secondary" className="w-full justify-start">
                         <User className="w-4 h-4 mr-2" />
@@ -447,38 +482,131 @@ export default function HomePage() {
           {soloGoals.map((goal) => {
             const streak = calculateStreak(goal.checkins)
             const checkedInToday = hasCheckedInToday(goal)
+            const isActiveSwipe = swipeGoalId === goal.id
+            const completedDays = goal.duration_days ? Math.min(goal.checkins.length, goal.duration_days) : null
+            const progressPercent = goal.duration_days && completedDays !== null
+              ? Math.min(100, Math.max(0, (completedDays / goal.duration_days) * 100))
+              : 0
             
             return (
-              <Link key={goal.id} href={`/goal/${goal.id}`} prefetch={false}>
-                <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
+              <div
+                key={goal.id}
+                className="relative"
+                onTouchStart={(e) => {
+                  if (e.touches.length !== 1) return
+                  setSwipeGoalId(goal.id)
+                  setSwipeStartX(e.touches[0].clientX)
+                  setIsSwiping(true)
+                }}
+                onTouchMove={(e) => {
+                  if (!isSwiping || swipeGoalId !== goal.id || swipeStartX === null) return
+                  const deltaX = e.touches[0].clientX - swipeStartX
+                  // Only allow swiping left
+                  const offset = Math.min(0, deltaX)
+                  setSwipeOffsetX(offset)
+                }}
+                onTouchEnd={() => {
+                  if (!isSwiping || swipeGoalId !== goal.id) return
+                  const threshold = -80 // px to trigger delete
+                  if (swipeOffsetX <= threshold) {
+                    handleDeleteSoloGoal(goal.id)
+                  } else {
+                    // snap back
+                    setSwipeOffsetX(0)
+                    setSwipeGoalId(null)
+                    setIsSwiping(false)
+                  }
+                }}
+                onTouchCancel={() => {
+                  setSwipeOffsetX(0)
+                  setSwipeGoalId(null)
+                  setIsSwiping(false)
+                }}
+              >
+                {/* Delete background */}
+                <div className="absolute inset-0 flex items-center justify-end pr-4 pointer-events-none select-none bg-red-50 dark:bg-red-950/20 rounded-md">
+                  <span className="text-red-600 dark:text-red-400 font-medium">Delete</span>
+                </div>
+                <Link
+                  href={`/goal/${goal.id}`}
+                  prefetch={false}
+                  onClick={(e) => {
+                    // Prevent accidental navigation when swiping
+                    if (swipeGoalId === goal.id && Math.abs(swipeOffsetX) > 5) {
+                      e.preventDefault()
+                      e.stopPropagation()
+                    }
+                  }}
+                >
+                  <Card
+                    className="hover:shadow-lg transition-shadow cursor-pointer h-full will-change-transform relative"
+                    style={{ transform: isActiveSwipe ? `translateX(${swipeOffsetX}px)` : undefined, transition: !isActiveSwipe ? 'transform 150ms ease-out' : undefined }}
+                  >
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 min-w-0 flex-1">
                         <span className="text-2xl">{goal.emoji || '🎯'}</span>
-                        <CardTitle className="text-base sm:text-lg truncate pr-2">{goal.name}</CardTitle>
+                        <div className="flex items-center gap-3 min-w-0">
+                          <CardTitle className="text-base sm:text-lg truncate pr-2">{goal.name}</CardTitle>
+                          <Badge variant="secondary" className="shrink-0">
+                            <User className="w-3 h-3 mr-1" />
+                            Solo
+                          </Badge>
+                        </div>
                       </div>
                     </div>
                   </CardHeader>
                   <CardContent className="pt-0">
-                    <div className="flex items-center justify-between mb-2">
-                      <Badge variant="secondary" className="shrink-0">
-                        <User className="w-3 h-3 mr-1" />
-                        Solo
-                      </Badge>
-                      <Button
-                        size="sm"
-                        variant={checkedInToday ? 'secondary' : 'default'}
-                        disabled={checkedInToday || loggingSoloGoalIds.has(goal.id)}
-                        className="shrink-0"
-                        onClick={(e) => {
-                          e.preventDefault()
-                          e.stopPropagation()
-                          handleSoloLog(goal.id)
-                        }}
-                      >
-                        {checkedInToday ? 'Logged' : 'Log'}
-                      </Button>
-                    </div>
+                    {goal.duration_days !== null && (
+                      <div className="mb-3">
+                        <div className="h-2 w-full rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden">
+                          <div
+                            className="h-2 bg-orange-600 transition-all"
+                            style={{ width: `${progressPercent}%` }}
+                          />
+                        </div>
+                        <div className="mt-1 text-[10px] sm:text-xs text-muted-foreground">
+                          Day {completedDays} / {goal.duration_days}
+                        </div>
+                      </div>
+                    )}
+                    {goal.duration_days === null && (
+                      <div className="mb-3">
+                        {(() => {
+                          const todayStr = getTodayDate()
+                          const today = new Date(todayStr)
+                          const year = today.getFullYear()
+                          const monthIndex = today.getMonth() // 0-based
+                          const daysInMonth = new Date(year, monthIndex + 1, 0).getDate()
+                          const allMonthDates: string[] = []
+                          for (let day = 1; day <= daysInMonth; day++) {
+                            const d = new Date(year, monthIndex, day)
+                            const iso = d.toISOString().split('T')[0]
+                            allMonthDates.push(iso)
+                          }
+                          const streakCount = Math.min(calculateStreak(goal.checkins), daysInMonth)
+                          const tileSize = 22 // px; tweak here if you want larger/smaller squares
+                            return (
+                              <div className="grid grid-cols-12 gap-x-[2px] gap-y-[8px]">
+                              {allMonthDates.map((date, idx) => {
+                                const isFilled = idx < streakCount
+                                return (
+                                  <div
+                                    key={date}
+                                    className="rounded-sm"
+                                    style={{
+                                      width: `${tileSize}px`,
+                                      height: `${tileSize}px`,
+                                      backgroundColor: isFilled ? '#E76000' : '#BFBFBF',
+                                    }}
+                                  />
+                                )
+                              })}
+                            </div>
+                          )
+                        })()}
+                      </div>
+                    )}
                     <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Flame
@@ -498,13 +626,29 @@ export default function HomePage() {
                         {streak} day streak
                       </span>
                     </div>
-                      <div className="text-xl sm:text-2xl">
-                        {checkedInToday ? '✅' : '⏰'}
-                      </div>
                     </div>
                   </CardContent>
-                </Card>
-              </Link>
+                  {/* Bottom-right log button + label */}
+                  <div className="absolute bottom-3 right-3 flex flex-col items-center gap-1">
+                    <Button
+                      size="icon"
+                      variant={checkedInToday ? 'secondary' : 'default'}
+                      disabled={checkedInToday || loggingSoloGoalIds.has(goal.id)}
+                      className="h-8 w-8 rounded-md"
+                      aria-label={checkedInToday ? 'Logged' : 'Log'}
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        handleSoloLog(goal.id)
+                      }}
+                    >
+                      {checkedInToday ? <Check className="w-5 h-5" /> : null}
+                    </Button>
+                    <span className="text-[10px] text-muted-foreground">{checkedInToday ? 'Logged' : 'Log'}</span>
+                  </div>
+                  </Card>
+                </Link>
+              </div>
             )
           })}
 
@@ -515,35 +659,39 @@ export default function HomePage() {
             
             return (
               <Link key={goal.id} href={`/goal/${goal.id}`} prefetch={false}>
-                <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
+                <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full relative">
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 min-w-0 flex-1">
                         <span className="text-2xl">{goal.emoji || '🎯'}</span>
-                        <CardTitle className="text-base sm:text-lg truncate pr-2">{goal.name}</CardTitle>
+                        <div className="flex items-center gap-3 min-w-0">
+                          <CardTitle className="text-base sm:text-lg truncate pr-2">{goal.name}</CardTitle>
+                          <Badge variant="secondary" className="shrink-0">
+                            <Users className="w-3 h-3 mr-1" />
+                            Group
+                          </Badge>
+                        </div>
+                      </div>
+                      <div className="flex -space-x-1 shrink-0">
+                        {goal.participants.slice(0, 3).map((participant) => (
+                          <div
+                            key={participant.id}
+                            className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-white border-2 border-white dark:bg-zinc-800 dark:border-zinc-900 flex items-center justify-center text-xs"
+                            title={participant.nickname}
+                          >
+                            {participant.emoji}
+                          </div>
+                        ))}
+                        {goal.participants.length > 3 && (
+                          <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-gray-200 dark:bg-zinc-700 border-2 border-white dark:border-zinc-900 flex items-center justify-center text-xs">
+                            +{goal.participants.length - 3}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </CardHeader>
                   <CardContent className="pt-0">
-                    <div className="flex items-center justify-between mb-2">
-                      <Badge variant="secondary" className="shrink-0">
-                        <Users className="w-3 h-3 mr-1" />
-                        Group
-                      </Badge>
-                      <Button
-                        size="sm"
-                        variant={groupCheckedTodayGoalIds.has(goal.id) ? 'secondary' : 'default'}
-                        disabled={groupCheckedTodayGoalIds.has(goal.id) || loggingGroupGoalIds.has(goal.id)}
-                        className="shrink-0"
-                        onClick={(e) => {
-                          e.preventDefault()
-                          e.stopPropagation()
-                          handleGroupLog(goal)
-                        }}
-                      >
-                        {groupCheckedTodayGoalIds.has(goal.id) ? 'Logged' : 'Log'}
-                      </Button>
-                    </div>
+                    
                     <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Flame
@@ -565,24 +713,27 @@ export default function HomePage() {
                         {groupStreak} day streak
                       </span>
                     </div>
-                      <div className="flex -space-x-1">
-                        {goal.participants.slice(0, 3).map((participant) => (
-                          <div
-                            key={participant.id}
-                            className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-white border-2 border-white flex items-center justify-center text-xs"
-                            title={participant.nickname}
-                          >
-                            {participant.emoji}
-                          </div>
-                        ))}
-                        {goal.participants.length > 3 && (
-                          <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center text-xs">
-                            +{goal.participants.length - 3}
-                          </div>
-                        )}
-                      </div>
+                      <div />
                     </div>
                   </CardContent>
+                  {/* Bottom-right log button + label (group) */}
+                  <div className="absolute bottom-3 right-3 flex flex-col items-center gap-1">
+                    <Button
+                      size="icon"
+                      variant={groupCheckedTodayGoalIds.has(goal.id) ? 'secondary' : 'default'}
+                      disabled={groupCheckedTodayGoalIds.has(goal.id) || loggingGroupGoalIds.has(goal.id)}
+                      className="h-8 w-8 rounded-md"
+                      aria-label={groupCheckedTodayGoalIds.has(goal.id) ? 'Logged' : 'Log'}
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        handleGroupLog(goal)
+                      }}
+                    >
+                      {groupCheckedTodayGoalIds.has(goal.id) ? <Check className="w-5 h-5" /> : null}
+                    </Button>
+                    <span className="text-[10px] text-muted-foreground">{groupCheckedTodayGoalIds.has(goal.id) ? 'Logged' : 'Log'}</span>
+                  </div>
                 </Card>
               </Link>
             )
@@ -615,6 +766,81 @@ export default function HomePage() {
             </CardContent>
           </Card>
         )}
+
+        {/* Mobile Floating Action Button (Create) */}
+        {!showMobileMenu && (
+          <button
+            aria-label="Quick create goal"
+            onClick={() => setShowCreateSheet(true)}
+            className="sm:hidden fixed right-5 bottom-14 z-10 rounded-full h-14 w-14 bg-primary text-primary-foreground shadow-lg shadow-black/20 flex items-center justify-center"
+          >
+            <Plus className="w-6 h-6" />
+          </button>
+        )}
+
+        {/* Quick Create Sheet (mobile) */}
+        <Sheet open={showCreateSheet} onOpenChange={setShowCreateSheet}>
+          <SheetContent side="bottom" className="sm:hidden rounded-t-xl pb-4">
+            <SheetHeader>
+              <SheetTitle>Quick Create</SheetTitle>
+            </SheetHeader>
+            <div className="px-4 space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="quickGoalName">Goal Name</Label>
+                <Input
+                  id="quickGoalName"
+                  placeholder="e.g., Read 20m"
+                  value={quickGoalName}
+                  onChange={(e) => setQuickGoalName(e.target.value)}
+                  maxLength={25}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Emoji</Label>
+                <div className="grid grid-cols-10 gap-1 max-h-36 overflow-y-auto p-2 border rounded-lg">
+                  {EMOJI_OPTIONS.map((emoji) => (
+                    <button
+                      key={emoji}
+                      type="button"
+                      onClick={() => setQuickSelectedEmoji(emoji)}
+                      className={`w-8 h-8 flex items-center justify-center text-xl rounded transition-colors ${
+                        quickSelectedEmoji === emoji ? 'bg-blue-100 border-2 border-blue-300' : 'hover:bg-gray-100'
+                      }`}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <SheetFooter>
+              <Button
+                disabled={!quickGoalName.trim() || quickCreating}
+                onClick={() => {
+                  if (!quickGoalName.trim() || !userIdentity) return
+                  setQuickCreating(true)
+                  try {
+                    const goal = addSoloGoal({
+                      name: quickGoalName.trim().slice(0, 10),
+                      type: 'solo',
+                      duration_days: null,
+                      checkins: [],
+                      emoji: quickSelectedEmoji,
+                    })
+                    setShowCreateSheet(false)
+                    setQuickGoalName("")
+                    router.push(`/goal/${goal.id}`)
+                  } finally {
+                    setQuickCreating(false)
+                  }
+                }}
+                className="w-full"
+              >
+                {quickCreating ? 'Creating...' : 'Create Goal'}
+              </Button>
+            </SheetFooter>
+          </SheetContent>
+        </Sheet>
       </div>
     </div>
   )
