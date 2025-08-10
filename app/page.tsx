@@ -780,7 +780,11 @@ export default function HomePage() {
 
         {/* Quick Create Sheet (mobile) */}
         <Sheet open={showCreateSheet} onOpenChange={setShowCreateSheet}>
-          <SheetContent side="bottom" className="sm:hidden rounded-t-xl pb-4">
+          <SheetContent
+            side="bottom"
+            className="sm:hidden rounded-t-xl pb-4"
+            onOpenAutoFocus={(e) => e.preventDefault()}
+          >
             <SheetHeader>
               <SheetTitle>Quick Create</SheetTitle>
             </SheetHeader>
