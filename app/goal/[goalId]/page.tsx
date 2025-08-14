@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { getUserIdentity, getSoloGoals, addCheckinToSoloGoal, hasCheckedInToday, calculateStreak, calculateHighestStreak, calculateGroupStreak, calculateHighestGroupStreak, checkAndUpdateGroupStreak, updateNumericGoalValue, isNumericGoalCompleted, getNumericGoalProgress, type SoloGoal } from "@/lib/local-storage"
 import { supabase, type Goal, type Participant, type Checkin, type GroupStreak, isSupabaseConfigured } from "@/lib/supabase"
-import { ArrowLeft, Users, User, Flame, Calendar, Share2, Copy, Settings } from 'lucide-react'
+import { ArrowLeft, Users, User, Flame, Calendar, Share2, Copy, Settings, LogOut } from 'lucide-react'
 import Link from "next/link"
 import Image from "next/image"
 import { GoalManagement } from "@/components/goal-management"
@@ -35,6 +35,8 @@ export default function GoalPage() {
   const [showUpdateDialog, setShowUpdateDialog] = useState(false)
   const [newValue, setNewValue] = useState("")
   const [updatingValue, setUpdatingValue] = useState(false)
+  const [showLeaveDialog, setShowLeaveDialog] = useState(false)
+  const [leaving, setLeaving] = useState(false)
 
   const userIdentity = useMemo(() => getUserIdentity(), [])
 
@@ -260,6 +262,60 @@ export default function GoalPage() {
   const copyGoalCode = () => {
     navigator.clipboard.writeText(goalId)
     alert('Goal code copied to clipboard!')
+  }
+
+  const handleLeaveGroup = async () => {
+    if (!userIdentity || !supabase) return
+    
+    setLeaving(true)
+    
+    try {
+      // Find the participant record for the current user
+      const { data: participant, error: participantError } = await supabase
+        .from('participants')
+        .select('*')
+        .eq('goal_id', goalId)
+        .eq('nickname', userIdentity.nickname)
+        .single()
+      
+      if (participantError || !participant) {
+        throw new Error("Participant not found")
+      }
+      
+      // Delete the participant's check-ins
+      await supabase
+        .from('checkins')
+        .delete()
+        .eq('participant_id', participant.id)
+      
+      // Delete the participant record
+      const { error: deleteError } = await supabase
+        .from('participants')
+        .delete()
+        .eq('id', participant.id)
+      
+      if (deleteError) throw deleteError
+      
+      // Check if this was the last participant and delete the goal if so
+      const { data: remainingParticipants } = await supabase
+        .from('participants')
+        .select('*')
+        .eq('goal_id', goalId)
+      
+      if (!remainingParticipants || remainingParticipants.length === 0) {
+        // Delete the entire goal if no participants remain
+        await supabase.from('group_streaks').delete().eq('goal_id', goalId)
+        await supabase.from('goals').delete().eq('id', goalId)
+      }
+      
+      router.push("/")
+    } catch (error) {
+      console.error('Error leaving goal:', error)
+      alert('Failed to leave goal. Please try again.')
+    } finally {
+      setLeaving(false)
+      setShowLeaveDialog(false)
+    }
   }
 
   if (loading) {
@@ -614,13 +670,40 @@ export default function GoalPage() {
                 )
               )}
             </CardContent>
-          </Card>
+                  </Card>
 
+        {/* Leave Group Dialog */}
+        <Dialog open={showLeaveDialog} onOpenChange={setShowLeaveDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Leave Group Goal?</DialogTitle>
+              <DialogDescription>
+                Are you sure you want to leave "{groupGoal?.name}"? You will lose access to this goal and your check-ins will be removed. If you're the last member, the goal will be deleted.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                onClick={() => setShowLeaveDialog(false)}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleLeaveGroup}
+                disabled={leaving}
+                className="flex-1 bg-orange-600 hover:bg-orange-700"
+              >
+                {leaving ? "Leaving..." : "Leave Goal"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
-        </div>
       </div>
-    )
-  }
+    </div>
+  )
+}
 
   if (!groupGoal) {
     return (
@@ -653,14 +736,25 @@ export default function GoalPage() {
               Back to Home
             </Button>
           </Link>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowManagement(!showManagement)}
-          >
-            <Settings className="w-4 h-4 mr-2" />
-            Settings
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowManagement(!showManagement)}
+            >
+              <Settings className="w-4 h-4 mr-2" />
+              Settings
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-orange-300 text-orange-600 hover:bg-orange-50"
+              onClick={() => setShowLeaveDialog(true)}
+            >
+              <LogOut className="w-4 h-4 mr-2" />
+              Leave
+            </Button>
+          </div>
         </div>
 
         {/* Goal Management Panel (animated) */}
