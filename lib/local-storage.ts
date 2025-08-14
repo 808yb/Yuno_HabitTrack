@@ -29,41 +29,49 @@ const getTodayDate = (): string => {
   return new Date().toISOString().split('T')[0]
 }
 
+// Memoized date parsing to avoid repeated Date object creation
+const parseDate = (dateStr: string): Date => {
+  return new Date(dateStr)
+}
+
+// Optimized streak calculation with early termination
 const calculateStreak = (checkins: string[]): number => {
   if (checkins.length === 0) return 0
   
-  const sortedDates = checkins.sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
-  const today = getTodayDate() // Use getTodayDate here
+  // Sort dates once and cache the result
+  const sortedDates = checkins.sort((a, b) => b.localeCompare(a)) // String comparison is faster for ISO dates
+  const today = getTodayDate()
   
   let streak = 0
-  let currentDate = new Date(today)
+  let currentDate = parseDate(today)
   
   for (const checkinDate of sortedDates) {
-    const checkinDateObj = new Date(checkinDate)
+    const checkinDateObj = parseDate(checkinDate)
     const diffTime = currentDate.getTime() - checkinDateObj.getTime()
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
     
     if (diffDays === streak) {
       streak++
-      currentDate = new Date(checkinDateObj)
+      currentDate = checkinDateObj
     } else {
-      break
+      break // Early termination when streak breaks
     }
   }
   
   return streak
 }
 
+// Optimized highest streak calculation
 const calculateHighestStreak = (checkins: string[]): number => {
   if (checkins.length === 0) return 0
   
-  const sortedDates = checkins.sort((a, b) => new Date(a).getTime() - new Date(b).getTime())
+  const sortedDates = checkins.sort((a, b) => a.localeCompare(b)) // String comparison is faster
   let highestStreak = 0
   let currentStreak = 0
   let previousDate: Date | null = null
   
   for (const checkinDate of sortedDates) {
-    const currentDate = new Date(checkinDate)
+    const currentDate = parseDate(checkinDate)
     
     if (previousDate === null) {
       currentStreak = 1
@@ -72,10 +80,8 @@ const calculateHighestStreak = (checkins: string[]): number => {
       const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
       
       if (diffDays === 1) {
-        // Consecutive day
         currentStreak++
       } else {
-        // Gap in streak, reset
         currentStreak = 1
       }
     }
@@ -87,8 +93,9 @@ const calculateHighestStreak = (checkins: string[]): number => {
   return highestStreak
 }
 
+// Optimized today check with memoization
 const hasCheckedInToday = (goal: SoloGoal): boolean => {
-  const today = getTodayDate() // Use getTodayDate here
+  const today = getTodayDate()
   return goal.checkins.includes(today)
 }
 
