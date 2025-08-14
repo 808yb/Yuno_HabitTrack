@@ -13,6 +13,12 @@ export interface SoloGoal {
   created_at: string
   checkins: string[] // array of dates in YYYY-MM-DD format
   emoji: string
+  // New fields for numeric goals
+  goal_type?: 'habit' | 'increasing' | 'decreasing' // 'habit' is the default for backward compatibility
+  current_value?: number
+  target_value?: number
+  start_value?: number // Starting value for decreasing goals
+  unit?: string // e.g., 'kg', 'days', 'books', etc.
 }
 
 const USER_IDENTITY_KEY = 'yuno_user_identity'
@@ -46,6 +52,39 @@ const calculateStreak = (checkins: string[]): number => {
   }
   
   return streak
+}
+
+const calculateHighestStreak = (checkins: string[]): number => {
+  if (checkins.length === 0) return 0
+  
+  const sortedDates = checkins.sort((a, b) => new Date(a).getTime() - new Date(b).getTime())
+  let highestStreak = 0
+  let currentStreak = 0
+  let previousDate: Date | null = null
+  
+  for (const checkinDate of sortedDates) {
+    const currentDate = new Date(checkinDate)
+    
+    if (previousDate === null) {
+      currentStreak = 1
+    } else {
+      const diffTime = currentDate.getTime() - previousDate.getTime()
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+      
+      if (diffDays === 1) {
+        // Consecutive day
+        currentStreak++
+      } else {
+        // Gap in streak, reset
+        currentStreak = 1
+      }
+    }
+    
+    highestStreak = Math.max(highestStreak, currentStreak)
+    previousDate = currentDate
+  }
+  
+  return highestStreak
 }
 
 const hasCheckedInToday = (goal: SoloGoal): boolean => {
@@ -144,6 +183,57 @@ const updateSoloGoalEmoji = (goalId: string, emoji: string): void => {
   updateSoloGoal(goalId, { emoji })
 }
 
+// New functions for numeric goals
+const updateNumericGoalValue = (goalId: string, newValue: number): void => {
+  const goals = getSoloGoals()
+  const goal = goals.find(g => g.id === goalId)
+  
+  if (goal && (goal.goal_type === 'increasing' || goal.goal_type === 'decreasing')) {
+    goal.current_value = newValue
+    setSoloGoals(goals)
+  }
+}
+
+const isNumericGoalCompleted = (goal: SoloGoal): boolean => {
+  if (!goal.goal_type || goal.goal_type === 'habit') return false
+  if (goal.current_value === undefined || goal.target_value === undefined) return false
+  
+  if (goal.goal_type === 'increasing') {
+    return goal.current_value >= goal.target_value
+  } else if (goal.goal_type === 'decreasing') {
+    return goal.current_value <= goal.target_value
+  }
+  
+  return false
+}
+
+const getNumericGoalProgress = (goal: SoloGoal): { progress: number; remaining: number } => {
+  if (!goal.goal_type || goal.goal_type === 'habit') {
+    return { progress: 0, remaining: 0 }
+  }
+  
+  if (goal.current_value === undefined || goal.target_value === undefined) {
+    return { progress: 0, remaining: 0 }
+  }
+  
+  let progress: number
+  let remaining: number
+  
+  if (goal.goal_type === 'increasing') {
+    progress = Math.min((goal.current_value / goal.target_value) * 100, 100)
+    remaining = Math.max(goal.target_value - goal.current_value, 0)
+  } else {
+    // For decreasing goals, use start_value if available, otherwise estimate
+    const startValue = goal.start_value || (goal.current_value + Math.abs(goal.target_value - goal.current_value))
+    const totalDistance = startValue - goal.target_value
+    const currentDistance = startValue - goal.current_value
+    progress = Math.min((currentDistance / totalDistance) * 100, 100)
+    remaining = Math.max(goal.current_value - goal.target_value, 0)
+  }
+  
+  return { progress, remaining }
+}
+
 // Group streak functions
 const calculateGroupStreak = (streakDates: string[]): number => {
   if (streakDates.length === 0) return 0
@@ -168,6 +258,39 @@ const calculateGroupStreak = (streakDates: string[]): number => {
   }
   
   return streak
+}
+
+const calculateHighestGroupStreak = (streakDates: string[]): number => {
+  if (streakDates.length === 0) return 0
+  
+  const sortedDates = streakDates.sort((a, b) => new Date(a).getTime() - new Date(b).getTime())
+  let highestStreak = 0
+  let currentStreak = 0
+  let previousDate: Date | null = null
+  
+  for (const streakDate of sortedDates) {
+    const currentDate = new Date(streakDate)
+    
+    if (previousDate === null) {
+      currentStreak = 1
+    } else {
+      const diffTime = currentDate.getTime() - previousDate.getTime()
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+      
+      if (diffDays === 1) {
+        // Consecutive day
+        currentStreak++
+      } else {
+        // Gap in streak, reset
+        currentStreak = 1
+      }
+    }
+    
+    highestStreak = Math.max(highestStreak, currentStreak)
+    previousDate = currentDate
+  }
+  
+  return highestStreak
 }
 
 const checkAndUpdateGroupStreak = async (goalId: string, participants: any[], checkins: any[]): Promise<void> => {
@@ -206,8 +329,10 @@ const checkAndUpdateGroupStreak = async (goalId: string, participants: any[], ch
 export {
   getTodayDate,
   calculateStreak,
+  calculateHighestStreak,
   hasCheckedInToday,
   calculateGroupStreak,
+  calculateHighestGroupStreak,
   checkAndUpdateGroupStreak,
   getUserIdentity,
   setUserIdentity,
@@ -219,4 +344,7 @@ export {
   deleteSoloGoal,
   renameSoloGoal,
   updateSoloGoalEmoji,
+  updateNumericGoalValue,
+  isNumericGoalCompleted,
+  getNumericGoalProgress,
 }

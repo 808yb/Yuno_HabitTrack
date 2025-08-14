@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
 import { getUserIdentity, addSoloGoal } from "@/lib/local-storage"
 import { supabase, isSupabaseConfigured } from "@/lib/supabase"
 import { ArrowLeft, Users, User, Palette } from 'lucide-react'
@@ -21,6 +22,29 @@ export default function CreateGoalPage() {
   const [selectedEmoji, setSelectedEmoji] = useState("🎯")
   const [loading, setLoading] = useState(false)
   const [isVisible, setIsVisible] = useState(false)
+  
+  // New state for numeric goals
+  const [goalCategory, setGoalCategory] = useState<"habit" | "increasing" | "decreasing">("habit")
+  const [currentValue, setCurrentValue] = useState("")
+  const [targetValue, setTargetValue] = useState("")
+  const [unit, setUnit] = useState("")
+
+  // Reset goal category to habit when switching to group goals
+  useEffect(() => {
+    if (goalType === "coop" && goalCategory !== "habit") {
+      setGoalCategory("habit")
+      setCurrentValue("")
+      setTargetValue("")
+      setUnit("")
+    }
+  }, [goalType, goalCategory])
+
+  // Switch to solo goal when selecting numeric goal categories
+  useEffect(() => {
+    if (goalCategory !== "habit" && goalType === "coop") {
+      setGoalType("solo")
+    }
+  }, [goalCategory, goalType])
 
   const EMOJI_OPTIONS = [
     '🎯', '💪', '🏃‍♂️', '🧘‍♀️', '📚', '💻', '🎨', '🎵', '🍎', '💧',
@@ -50,6 +74,34 @@ export default function CreateGoalPage() {
     e.preventDefault()
     
     if (!goalName.trim()) return
+    
+
+    
+    // Validate numeric goal inputs
+    if (goalCategory !== "habit") {
+      if (!currentValue.trim() || !targetValue.trim()) {
+        alert("Please enter both current and target values for numeric goals.")
+        return
+      }
+      
+      const current = parseFloat(currentValue)
+      const target = parseFloat(targetValue)
+      
+      if (isNaN(current) || isNaN(target)) {
+        alert("Please enter valid numbers for current and target values.")
+        return
+      }
+      
+      if (goalCategory === "increasing" && current >= target) {
+        alert("For increasing goals, your current value should be less than your target value.")
+        return
+      }
+      
+      if (goalCategory === "decreasing" && current <= target) {
+        alert("For decreasing goals, your current value should be greater than your target value.")
+        return
+      }
+    }
 
     setLoading(true)
 
@@ -57,13 +109,28 @@ export default function CreateGoalPage() {
       const limitedName = goalName.trim().slice(0, 10)
       if (goalType === "solo") {
         // Create solo goal locally
-        const goal = addSoloGoal({
+        const goalData: any = {
           name: limitedName,
           type: "solo",
           duration_days: duration === "unlimited" ? null : parseInt(duration),
           checkins: [],
-          emoji: selectedEmoji
-        })
+          emoji: selectedEmoji,
+          goal_type: goalCategory
+        }
+        
+        // Add numeric goal data if applicable
+        if (goalCategory !== "habit") {
+          goalData.current_value = parseFloat(currentValue) || 0
+          goalData.target_value = parseFloat(targetValue) || 0
+          goalData.unit = unit.trim()
+          
+          // For decreasing goals, set start_value to current_value
+          if (goalCategory === "decreasing") {
+            goalData.start_value = parseFloat(currentValue) || 0
+          }
+        }
+        
+        const goal = addSoloGoal(goalData)
         
         router.push(`/goal/${goal.id}`)
       } else {
@@ -152,6 +219,101 @@ export default function CreateGoalPage() {
               </div>
 
               <div className="space-y-3">
+                <Label>Goal Category</Label>
+                <RadioGroup value={goalCategory} onValueChange={(value: "habit" | "increasing" | "decreasing") => setGoalCategory(value)}>
+                  <div className="flex items-center space-x-2 p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors">
+                    <RadioGroupItem value="habit" id="habit" />
+                    <Label htmlFor="habit" className="cursor-pointer text-sm sm:text-base flex-1">
+                      <div className="font-medium">Habit Tracker</div>
+                      <div className="text-xs text-gray-500">Daily check-ins and streak tracking</div>
+                    </Label>
+                  </div>
+                  <div className={`flex items-center space-x-2 p-3 border rounded-lg transition-colors ${
+                    goalType === "coop" 
+                      ? 'opacity-50 bg-gray-100 dark:bg-zinc-800 cursor-not-allowed' 
+                      : 'hover:bg-gray-50 dark:hover:bg-zinc-800'
+                  }`}>
+                    <RadioGroupItem value="increasing" id="increasing" disabled={goalType === "coop"} />
+                    <Label htmlFor="increasing" className={`cursor-pointer text-sm sm:text-base flex-1 ${goalType === "coop" ? 'cursor-not-allowed' : ''}`}>
+                      <div className="font-medium">Increasing Goal</div>
+                      <div className="text-xs text-gray-500">
+                        Build up to a target (e.g., read 10 books, save $1000)
+                        {goalType === "coop" && <span className="text-red-500"> - Solo only</span>}
+                      </div>
+                    </Label>
+                  </div>
+                  <div className={`flex items-center space-x-2 p-3 border rounded-lg transition-colors ${
+                    goalType === "coop" 
+                      ? 'opacity-50 bg-gray-100 dark:bg-zinc-800 cursor-not-allowed' 
+                      : 'hover:bg-gray-50 dark:hover:bg-zinc-800'
+                  }`}>
+                    <RadioGroupItem value="decreasing" id="decreasing" disabled={goalType === "coop"} />
+                    <Label htmlFor="decreasing" className={`cursor-pointer text-sm sm:text-base flex-1 ${goalType === "coop" ? 'cursor-not-allowed' : ''}`}>
+                      <div className="font-medium">Decreasing Goal</div>
+                      <div className="text-xs text-gray-500">
+                        Reduce to a target (e.g., lose weight, quit smoking days)
+                        {goalType === "coop" && <span className="text-red-500"> - Solo only</span>}
+                      </div>
+                    </Label>
+                  </div>
+                </RadioGroup>
+                {goalType === "coop" && (
+                  <p className="text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/20 p-2 rounded">
+                    💡 Group goals only support habit tracking. Numeric goals are available for solo goals only.
+                  </p>
+                )}
+              </div>
+
+              {goalCategory !== "habit" && (
+                <div className="space-y-4 p-4 border rounded-lg bg-gray-50 dark:bg-zinc-800">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="currentValue">Current Value</Label>
+                      <Input
+                        id="currentValue"
+                        type="number"
+                        placeholder={goalCategory === "increasing" ? "0" : "100"}
+                        value={currentValue}
+                        onChange={(e) => setCurrentValue(e.target.value)}
+                        className="text-base"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="targetValue">Target Value</Label>
+                      <Input
+                        id="targetValue"
+                        type="number"
+                        placeholder={goalCategory === "increasing" ? "10" : "70"}
+                        value={targetValue}
+                        onChange={(e) => setTargetValue(e.target.value)}
+                        className="text-base"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="unit">Unit</Label>
+                      <Input
+                        id="unit"
+                        type="text"
+                        placeholder={goalCategory === "increasing" ? "books, $, km..." : "kg, days, cigarettes..."}
+                        value={unit}
+                        onChange={(e) => setUnit(e.target.value)}
+                        className="text-base"
+                        maxLength={10}
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    {goalCategory === "increasing" 
+                      ? "Track your progress as you build up to your target value."
+                      : "Track your progress as you reduce to your target value."
+                    }
+                  </p>
+                </div>
+              )}
+
+              <div className="space-y-3">
                 <Label className="flex items-center gap-2">
                   <Palette className="w-4 h-4" />
                   Goal Emoji
@@ -183,17 +345,33 @@ export default function CreateGoalPage() {
                       Solo Goal - Just for you
                     </Label>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="coop" id="coop" disabled={!isSupabaseConfigured()} />
-                    <Label htmlFor="coop" className={`flex items-center gap-2 cursor-pointer text-sm sm:text-base ${!isSupabaseConfigured() ? 'opacity-50' : ''}`}>
+                  <div className={`flex items-center space-x-2 ${
+                    goalCategory !== "habit" ? 'opacity-50' : ''
+                  }`}>
+                    <RadioGroupItem 
+                      value="coop" 
+                      id="coop" 
+                      disabled={!isSupabaseConfigured() || goalCategory !== "habit"} 
+                    />
+                    <Label htmlFor="coop" className={`flex items-center gap-2 cursor-pointer text-sm sm:text-base ${
+                      !isSupabaseConfigured() || goalCategory !== "habit" ? 'opacity-50 cursor-not-allowed' : ''
+                    }`}>
                       <Users className="w-4 h-4" />
                       Group Goal - With friends
                       {!isSupabaseConfigured() && (
                         <span className="text-xs text-gray-500">(Requires Supabase setup)</span>
                       )}
+                      {goalCategory !== "habit" && (
+                        <span className="text-xs text-red-500">(Habit goals only)</span>
+                      )}
                     </Label>
                   </div>
                 </RadioGroup>
+                {goalCategory !== "habit" && (
+                  <p className="text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/20 p-2 rounded">
+                    💡 Numeric goals (increasing/decreasing) are only available for solo goals.
+                  </p>
+                )}
               </div>
 
               {goalType === "coop" && (
@@ -214,25 +392,49 @@ export default function CreateGoalPage() {
                 </div>
               )}
 
-              <div className="space-y-2">
-                <Label htmlFor="duration">Duration</Label>
-                <Select value={duration} onValueChange={setDuration}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="unlimited">Unlimited</SelectItem>
-                    <SelectItem value="7">7 days</SelectItem>
-                    <SelectItem value="14">14 days</SelectItem>
-                    <SelectItem value="21">21 days</SelectItem>
-                    <SelectItem value="30">30 days</SelectItem>
-                    <SelectItem value="60">60 days</SelectItem>
-                    <SelectItem value="90">90 days</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              {goalCategory === "habit" && (
+                <div className="space-y-2">
+                  <Label htmlFor="duration">Duration</Label>
+                  <Select value={duration} onValueChange={setDuration}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unlimited">Unlimited</SelectItem>
+                      <SelectItem value="7">7 days</SelectItem>
+                      <SelectItem value="14">14 days</SelectItem>
+                      <SelectItem value="21">21 days</SelectItem>
+                      <SelectItem value="30">30 days</SelectItem>
+                      <SelectItem value="60">60 days</SelectItem>
+                      <SelectItem value="90">90 days</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              
+              {goalCategory !== "habit" && (
+                <div className="space-y-2">
+                  <Label>Goal Completion</Label>
+                  <div className="p-3 border rounded-lg bg-blue-50 dark:bg-blue-950/20">
+                    <p className="text-sm text-blue-800 dark:text-blue-200">
+                      💡 This goal will be completed when you reach your target value. 
+                      No time limit applies - focus on steady progress!
+                    </p>
+                  </div>
+                </div>
+              )}
 
-              <Button type="submit" className="w-full" size="lg" disabled={!goalName.trim() || loading}>
+              <Button 
+                type="submit" 
+                className="w-full" 
+                size="lg" 
+                disabled={
+                  !goalName.trim() || 
+                  loading || 
+                  (goalType === "coop" && goalCategory !== "habit") ||
+                  (goalCategory !== "habit" && (!currentValue.trim() || !targetValue.trim()))
+                }
+              >
                 {loading ? "Creating..." : "Create Goal"}
               </Button>
             </form>

@@ -6,13 +6,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { getUserIdentity, getSoloGoals, type UserIdentity, type SoloGoal, hasCheckedInToday, calculateStreak, calculateGroupStreak, addCheckinToSoloGoal, getTodayDate, checkAndUpdateGroupStreak, deleteSoloGoal, addSoloGoal } from "@/lib/local-storage"
+import { getUserIdentity, getSoloGoals, type UserIdentity, type SoloGoal, hasCheckedInToday, calculateStreak, calculateGroupStreak, addCheckinToSoloGoal, getTodayDate, checkAndUpdateGroupStreak, deleteSoloGoal, addSoloGoal, isNumericGoalCompleted, getNumericGoalProgress, updateNumericGoalValue } from "@/lib/local-storage"
 import { supabase, type Goal, type Participant, type GroupStreak, isSupabaseConfigured } from "@/lib/supabase"
 import { Plus, Users, User, Target, Flame, Menu, X, Sun, Moon, Check } from 'lucide-react'
 import { useTheme } from "next-themes"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { FirstHabitOnboarding } from "@/components/first-habit-onboarding"
 import Image from "next/image"
 
@@ -42,6 +44,13 @@ export default function HomePage() {
   const [quickGoalName, setQuickGoalName] = useState("")
   const [quickSelectedEmoji, setQuickSelectedEmoji] = useState("🎯")
   const [quickCreating, setQuickCreating] = useState(false)
+  
+  // State for numeric goal updates
+  const [showUpdateDialog, setShowUpdateDialog] = useState(false)
+  const [updatingGoal, setUpdatingGoal] = useState<SoloGoal | null>(null)
+  const [newValue, setNewValue] = useState("")
+  const [updatingValue, setUpdatingValue] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
   const EMOJI_OPTIONS = [
     '🎯', '💪', '🏃‍♂️', '🧘‍♀️', '📚', '💻', '🎨', '🎵', '🍎', '💧',
     '😴', '🏋️‍♂️', '🚴‍♂️', '🏊‍♀️', '🧠', '💡', '⭐', '🔥', '💎', '🌟'
@@ -73,6 +82,18 @@ export default function HomePage() {
       setLoading(false)
     }
   }, [userIdentity])
+
+  // Mobile detection
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768)
+    }
+    
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
 
   const loadGroupGoals = async (nickname: string) => {
     // Skip if Supabase is not configured
@@ -201,6 +222,74 @@ export default function HomePage() {
     setSwipeGoalId(null)
     setSwipeOffsetX(0)
     setIsSwiping(false)
+  }
+
+  const handleNumericGoalUpdate = () => {
+    if (!updatingGoal || !newValue.trim()) return
+    
+    const value = parseFloat(newValue)
+    if (isNaN(value)) return
+    
+    // Validate the new value based on goal type
+    if (updatingGoal.goal_type === 'increasing' && value < updatingGoal.current_value!) {
+      alert(`For increasing goals, you cannot update to a lower value. Current: ${updatingGoal.current_value}, New: ${value}`)
+      return
+    }
+    
+    if (updatingGoal.goal_type === 'decreasing' && value > updatingGoal.current_value!) {
+      alert(`For decreasing goals, you cannot update to a higher value. Current: ${updatingGoal.current_value}, New: ${value}`)
+      return
+    }
+    
+    setUpdatingValue(true)
+    
+    try {
+      updateNumericGoalValue(updatingGoal.id, value)
+      
+      // Refresh solo goals data
+      const updated = getSoloGoals()
+      setSoloGoals(updated)
+      
+      setNewValue("")
+      setShowUpdateDialog(false)
+      setUpdatingGoal(null)
+    } catch (error) {
+      console.error('Error updating goal value:', error)
+      alert('Failed to update goal value. Please try again.')
+    } finally {
+      setUpdatingValue(false)
+    }
+  }
+
+  const openUpdateDialog = (goal: SoloGoal) => {
+    setUpdatingGoal(goal)
+    setNewValue(goal.current_value?.toString() || "")
+    setShowUpdateDialog(true)
+  }
+
+  const generateNumberOptions = (goal: SoloGoal) => {
+    if (!goal.current_value || !goal.target_value) return []
+    
+    const current = goal.current_value
+    const target = goal.target_value
+    const options: number[] = []
+    
+    if (goal.goal_type === 'increasing') {
+      // For increasing goals, start from current value and go up to target + some buffer
+      const max = Math.max(target, current) + Math.ceil((target - current) * 0.3)
+      for (let i = current; i <= max; i++) {
+        options.push(i)
+      }
+    } else if (goal.goal_type === 'decreasing') {
+      // For decreasing goals, generate from min to current value (ascending order for better UX)
+      // Never go below 0 for practical reasons
+      const min = Math.max(0, Math.min(target, current) - Math.ceil((current - target) * 0.3))
+      for (let i = min; i <= current; i++) {
+        options.push(i)
+      }
+    }
+    
+    return options
   }
 
   const handleGroupLog = async (goal: Goal & { participants: Participant[] }) => {
@@ -477,12 +566,16 @@ export default function HomePage() {
 
         {/* Goals Grid */}
         <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-          {/* Solo Goals */
-          }
+          {/* Solo Goals */}
           {soloGoals.map((goal) => {
             const streak = calculateStreak(goal.checkins)
             const checkedInToday = hasCheckedInToday(goal)
             const isActiveSwipe = swipeGoalId === goal.id
+            const isNumericGoal = goal.goal_type && goal.goal_type !== 'habit'
+            const isCompleted = isNumericGoal ? isNumericGoalCompleted(goal) : false
+            const progress = isNumericGoal ? getNumericGoalProgress(goal) : { progress: 0, remaining: 0 }
+            
+            // For duration-based goals
             const completedDays = goal.duration_days ? Math.min(goal.checkins.length, goal.duration_days) : null
             const progressPercent = goal.duration_days && completedDays !== null
               ? Math.min(100, Math.max(0, (completedDays / goal.duration_days) * 100))
@@ -548,103 +641,184 @@ export default function HomePage() {
                         <span className="text-2xl">{goal.emoji || '🎯'}</span>
                         <div className="flex items-center gap-3 min-w-0">
                           <CardTitle className="text-base sm:text-lg truncate pr-2">{goal.name}</CardTitle>
-                          <Badge variant="secondary" className="shrink-0">
-                            <User className="w-3 h-3 mr-1" />
-                            Solo
-                          </Badge>
+                          <div className="flex gap-1 shrink-0">
+                            <Badge variant="secondary" className="shrink-0">
+                              <User className="w-3 h-3 mr-1" />
+                              Solo
+                            </Badge>
+                            {isNumericGoal && (
+                              <Badge variant="outline" className="shrink-0 text-xs">
+                                {goal.goal_type === 'increasing' ? '📈' : '📉'}
+                              </Badge>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
                   </CardHeader>
                   <CardContent className="pt-0">
-                    {goal.duration_days !== null && (
+                    {isNumericGoal ? (
                       <div className="mb-3">
+                        <div className="text-center mb-2">
+                          <div className="text-lg font-bold">
+                            {goal.current_value} {goal.unit || ''}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            of {goal.target_value} {goal.unit || ''}
+                          </div>
+                        </div>
                         <div className="h-2 w-full rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden">
                           <div
-                            className="h-2 bg-orange-600 transition-all"
-                            style={{ width: `${progressPercent}%` }}
+                            className="h-2 transition-all"
+                            style={{ 
+                              width: `${Math.min(progress.progress, 100)}%`, 
+                              background: isCompleted 
+                                ? 'linear-gradient(to right, #10B981, #059669)' 
+                                : 'linear-gradient(to right, #386641, #6A994E)' 
+                            }}
                           />
                         </div>
-                        <div className="mt-1 text-[10px] sm:text-xs text-muted-foreground">
-                          Day {completedDays} / {goal.duration_days}
+                        <div className="mt-1 text-[10px] sm:text-xs text-muted-foreground text-center">
+                          {isCompleted 
+                            ? `Goal achieved! 🎉`
+                            : `${Math.round(progress.progress)}% complete`
+                          }
                         </div>
                       </div>
-                    )}
-                    {goal.duration_days === null && (
-                      <div className="mb-3">
-                        {(() => {
-                          const todayStr = getTodayDate()
-                          const today = new Date(todayStr)
-                          const year = today.getFullYear()
-                          const monthIndex = today.getMonth() // 0-based
-                          const daysInMonth = new Date(year, monthIndex + 1, 0).getDate()
-                          const allMonthDates: string[] = []
-                          for (let day = 1; day <= daysInMonth; day++) {
-                            const d = new Date(year, monthIndex, day)
-                            const iso = d.toISOString().split('T')[0]
-                            allMonthDates.push(iso)
-                          }
-                          const streakCount = Math.min(calculateStreak(goal.checkins), daysInMonth)
-                          const tileSize = 22 // px; tweak here if you want larger/smaller squares
-                            return (
-                              <div className="grid grid-cols-12 gap-x-[2px] gap-y-[8px]">
-                              {allMonthDates.map((date, idx) => {
-                                const isFilled = idx < streakCount
-                                return (
-                                  <div
-                                    key={date}
-                                    className="rounded-sm"
-                                    style={{
-                                      width: `${tileSize}px`,
-                                      height: `${tileSize}px`,
-                                      backgroundColor: isFilled ? '#E76000' : '#BFBFBF',
-                                    }}
-                                  />
-                                )
-                              })}
+                    ) : (
+                      <>
+                        {goal.duration_days !== null && (
+                          <div className="mb-3">
+                            <div className="h-2 w-full rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden">
+                              <div
+                                className="h-2 transition-all"
+                                style={{ width: `${progressPercent}%`, background: 'linear-gradient(to right, #386641, #6A994E)' }}
+                              />
                             </div>
-                          )
-                        })()}
-                      </div>
+                            <div className="mt-1 text-[10px] sm:text-xs text-muted-foreground">
+                              Day {completedDays} / {goal.duration_days}
+                            </div>
+                          </div>
+                        )}
+                        {goal.duration_days === null && (
+                          <div className="mb-3">
+                            {(() => {
+                              const todayStr = getTodayDate()
+                              const today = new Date(todayStr)
+                              const year = today.getFullYear()
+                              const monthIndex = today.getMonth() // 0-based
+                              const daysInMonth = new Date(year, monthIndex + 1, 0).getDate()
+                              const allMonthDates: string[] = []
+                              for (let day = 1; day <= daysInMonth; day++) {
+                                const d = new Date(year, monthIndex, day)
+                                const iso = d.toISOString().split('T')[0]
+                                allMonthDates.push(iso)
+                              }
+                              const streakCount = Math.min(calculateStreak(goal.checkins), daysInMonth)
+                              const tileSize = 22 // px; tweak here if you want larger/smaller squares
+                                return (
+                                  <div className="grid grid-cols-12 gap-x-[2px] gap-y-[8px]">
+                                  {allMonthDates.map((date, idx) => {
+                                    const isFilled = idx < streakCount
+                                    return (
+                                      <div
+                                        key={date}
+                                        className="rounded-sm"
+                                        style={{
+                                          width: `${tileSize}px`,
+                                          height: `${tileSize}px`,
+                                          background: isFilled ? 'linear-gradient(135deg, #386641, #6A994E)' : undefined,
+                                          backgroundColor: isFilled ? undefined : '#BFBFBF',
+                                        }}
+                                      />
+                                    )
+                                  })}
+                                </div>
+                              )
+                            })()}
+                          </div>
+                        )}
+                      </>
                     )}
                     <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Flame
-                        className={`w-4 h-4 ${
-                          streak > 0
-                            ? (checkedInToday
-                                ? 'text-orange-500'
-                                : 'text-gray-400 dark:text-gray-500')
-                            : 'text-gray-300 dark:text-gray-600'
-                        }`}
-                      />
-                      <span
-                        className={`font-semibold text-sm sm:text-base ${
-                          streak > 0 && checkedInToday ? 'text-orange-600 dark:text-orange-400' : ''
-                        }`}
-                      >
-                        {streak} day streak
-                      </span>
-                    </div>
+                      {isNumericGoal ? (
+                        <div className="flex items-center gap-2">
+                          <Target
+                            className={`w-4 h-4 ${
+                              isCompleted
+                                ? 'text-[#10B981]'
+                                : 'text-gray-400 dark:text-gray-500'
+                            }`}
+                          />
+                          <span
+                            className={`font-semibold text-sm sm:text-base ${
+                              isCompleted ? 'text-[#10B981]' : ''
+                            }`}
+                          >
+                            {isCompleted ? 'Completed!' : `${progress.remaining} ${goal.unit || ''} left`}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <Flame
+                            className={`w-4 h-4 ${
+                              streak > 0
+                                ? (checkedInToday
+                                    ? 'text-[#6A994E]'
+                                    : 'text-gray-400 dark:text-gray-500')
+                                : 'text-gray-300 dark:text-gray-600'
+                            }`}
+                          />
+                          <span
+                            className={`font-semibold text-sm sm:text-base ${
+                              streak > 0 && checkedInToday ? 'text-[#6A994E]' : ''
+                            }`}
+                          >
+                            {streak} day streak
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </CardContent>
-                  {/* Bottom-right log button + label */}
+                  {/* Bottom-right action button + label */}
                   <div className="absolute bottom-3 right-3 flex flex-col items-center gap-1">
-                    <Button
-                      size="icon"
-                      variant={checkedInToday ? 'secondary' : 'default'}
-                      disabled={checkedInToday || loggingSoloGoalIds.has(goal.id)}
-                      className="h-8 w-8 rounded-md"
-                      aria-label={checkedInToday ? 'Logged' : 'Log'}
-                      onClick={(e) => {
-                        e.preventDefault()
-                        e.stopPropagation()
-                        handleSoloLog(goal.id)
-                      }}
-                    >
-                      {checkedInToday ? <Check className="w-5 h-5" /> : null}
-                    </Button>
-                    <span className="text-[10px] text-muted-foreground">{checkedInToday ? 'Logged' : 'Log'}</span>
+                    {isNumericGoal ? (
+                      <>
+                        <Button
+                          size="icon"
+                          variant={isCompleted ? 'secondary' : 'default'}
+                          disabled={isCompleted || loggingSoloGoalIds.has(goal.id)}
+                          className="h-8 w-8 rounded-md"
+                          aria-label={isCompleted ? 'Completed' : 'Update'}
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            openUpdateDialog(goal)
+                          }}
+                        >
+                          {isCompleted ? <Check className="w-5 h-5" /> : <Target className="w-5 h-5" />}
+                        </Button>
+                        <span className="text-[10px] text-muted-foreground">{isCompleted ? 'Completed' : 'Update'}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Button
+                          size="icon"
+                          variant={checkedInToday ? 'secondary' : 'default'}
+                          disabled={checkedInToday || loggingSoloGoalIds.has(goal.id)}
+                          className="h-8 w-8 rounded-md"
+                          aria-label={checkedInToday ? 'Logged' : 'Log'}
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            handleSoloLog(goal.id)
+                          }}
+                        >
+                          {checkedInToday ? <Check className="w-5 h-5" /> : null}
+                        </Button>
+                        <span className="text-[10px] text-muted-foreground">{checkedInToday ? 'Logged' : 'Log'}</span>
+                      </>
+                    )}
                   </div>
                   </Card>
                 </Link>
@@ -698,7 +872,7 @@ export default function HomePage() {
                         className={`w-4 h-4 ${
                           groupStreak > 0
                             ? (groupCheckedTodayGoalIds.has(goal.id)
-                                ? 'text-orange-500'
+                                ? 'text-[#6A994E]'
                                 : 'text-gray-400 dark:text-gray-500')
                             : 'text-gray-300 dark:text-gray-600'
                         }`}
@@ -706,14 +880,13 @@ export default function HomePage() {
                       <span
                         className={`font-semibold text-sm sm:text-base ${
                           groupStreak > 0 && groupCheckedTodayGoalIds.has(goal.id)
-                            ? 'text-orange-600 dark:text-orange-400'
+                            ? 'text-[#6A994E]'
                             : ''
                         }`}
                       >
                         {groupStreak} day streak
                       </span>
                     </div>
-                      <div />
                     </div>
                   </CardContent>
                   {/* Bottom-right log button + label (group) */}
@@ -845,6 +1018,134 @@ export default function HomePage() {
             </SheetFooter>
           </SheetContent>
         </Sheet>
+
+        {/* Numeric Goal Update Dialog */}
+        <Dialog open={showUpdateDialog} onOpenChange={setShowUpdateDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Update {updatingGoal?.name}</DialogTitle>
+              <DialogDescription>
+                Enter your current value to track your progress.
+              </DialogDescription>
+              {updatingGoal && (
+                <div className="text-sm text-muted-foreground">
+                  Current: {updatingGoal.current_value} {updatingGoal.unit} | Target: {updatingGoal.target_value} {updatingGoal.unit}
+                </div>
+              )}
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="newValue">Current Value ({updatingGoal?.unit})</Label>
+                {isMobile && updatingGoal ? (
+                  <div className="space-y-3">
+                    <div className="text-center mb-2">
+                      <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                        {updatingGoal.goal_type === 'increasing' ? (
+                          <>
+                            <span>📈</span>
+                            <span>Scroll up to increase</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>📉</span>
+                            <span>Scroll down to decrease</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <Select value={newValue} onValueChange={setNewValue}>
+                      <SelectTrigger className="h-14 text-xl font-semibold">
+                        <SelectValue placeholder="Select value" />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-60">
+                        {generateNumberOptions(updatingGoal).map((value) => (
+                          <SelectItem 
+                            key={value} 
+                            value={value.toString()} 
+                            className="text-lg py-4 text-center"
+                          >
+                            <div className="flex items-center justify-center gap-2">
+                              <span className="font-semibold">{value}</span>
+                              <span className="text-muted-foreground">{updatingGoal.unit}</span>
+                              {value === updatingGoal.current_value && (
+                                <span className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-1 rounded">
+                                  Current
+                                </span>
+                              )}
+                              {value === updatingGoal.target_value && (
+                                <span className="text-xs bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 px-2 py-1 rounded">
+                                  Target
+                                </span>
+                              )}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Input
+                      id="newValue"
+                      type="number"
+                      placeholder="Enter current value"
+                      value={newValue}
+                      onChange={(e) => setNewValue(e.target.value)}
+                      autoFocus
+                    />
+                    <div className="text-center">
+                      <p className="text-xs text-muted-foreground">
+                        {updatingGoal?.goal_type === 'increasing' 
+                          ? `📈 Type a value ${updatingGoal?.current_value} or higher`
+                          : `📉 Type a value ${updatingGoal?.current_value} or lower`
+                        }
+                      </p>
+                    </div>
+                  </div>
+                )}
+                {updatingGoal && (
+                  <div className="mt-2">
+                    <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                      <span>Progress</span>
+                      <span>{Math.round(getNumericGoalProgress(updatingGoal).progress)}%</span>
+                    </div>
+                    <div className="h-2 w-full rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden">
+                      <div
+                        className="h-2 transition-all"
+                        style={{ 
+                          width: `${Math.min(getNumericGoalProgress(updatingGoal).progress, 100)}%`, 
+                          background: isNumericGoalCompleted(updatingGoal)
+                            ? 'linear-gradient(to right, #10B981, #059669)' 
+                            : 'linear-gradient(to right, #386641, #6A994E)' 
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button 
+                  onClick={handleNumericGoalUpdate} 
+                  disabled={!newValue.trim() || updatingValue}
+                  className="flex-1"
+                >
+                  {updatingValue ? "Updating..." : "Update"}
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setShowUpdateDialog(false)
+                    setUpdatingGoal(null)
+                    setNewValue("")
+                  }}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   )

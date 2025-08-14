@@ -5,10 +5,14 @@ import { useParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { getUserIdentity, getSoloGoals, addCheckinToSoloGoal, hasCheckedInToday, calculateStreak, calculateGroupStreak, checkAndUpdateGroupStreak, type SoloGoal } from "@/lib/local-storage"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { getUserIdentity, getSoloGoals, addCheckinToSoloGoal, hasCheckedInToday, calculateStreak, calculateHighestStreak, calculateGroupStreak, calculateHighestGroupStreak, checkAndUpdateGroupStreak, updateNumericGoalValue, isNumericGoalCompleted, getNumericGoalProgress, type SoloGoal } from "@/lib/local-storage"
 import { supabase, type Goal, type Participant, type Checkin, type GroupStreak, isSupabaseConfigured } from "@/lib/supabase"
 import { ArrowLeft, Users, User, Flame, Calendar, Share2, Copy, Settings } from 'lucide-react'
 import Link from "next/link"
+import Image from "next/image"
 import { GoalManagement } from "@/components/goal-management"
 
 export default function GoalPage() {
@@ -26,6 +30,11 @@ export default function GoalPage() {
   const [showManagement, setShowManagement] = useState(false)
   const isLoadingRef = useRef(false)
   const subscriptionRef = useRef<string | null>(null)
+  
+  // State for numeric goal updates
+  const [showUpdateDialog, setShowUpdateDialog] = useState(false)
+  const [newValue, setNewValue] = useState("")
+  const [updatingValue, setUpdatingValue] = useState(false)
 
   const userIdentity = useMemo(() => getUserIdentity(), [])
 
@@ -175,6 +184,34 @@ export default function GoalPage() {
     }
   }
 
+  const handleNumericGoalUpdate = () => {
+    if (!soloGoal || !newValue.trim()) return
+    
+    const value = parseFloat(newValue)
+    if (isNaN(value)) return
+    
+    setUpdatingValue(true)
+    
+    try {
+      updateNumericGoalValue(goalId, value)
+      
+      // Refresh solo goal data
+      const updatedGoals = getSoloGoals()
+      const updatedGoal = updatedGoals.find(g => g.id === goalId)
+      if (updatedGoal) {
+        setSoloGoal(updatedGoal)
+      }
+      
+      setNewValue("")
+      setShowUpdateDialog(false)
+    } catch (error) {
+      console.error('Error updating goal value:', error)
+      alert('Failed to update goal value. Please try again.')
+    } finally {
+      setUpdatingValue(false)
+    }
+  }
+
   const handleGroupCheckin = async () => {
     if (!groupGoal || !userIdentity || !supabase) return
 
@@ -238,7 +275,11 @@ export default function GoalPage() {
 
   if (soloGoal) {
     const streak = calculateStreak(soloGoal.checkins)
+    const highestStreak = calculateHighestStreak(soloGoal.checkins)
     const checkedInToday = hasCheckedInToday(soloGoal)
+    const isNumericGoal = soloGoal.goal_type && soloGoal.goal_type !== 'habit'
+    const isCompleted = isNumericGoal ? isNumericGoalCompleted(soloGoal) : false
+    const progress = isNumericGoal ? getNumericGoalProgress(soloGoal) : { progress: 0, remaining: 0 }
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-zinc-900 dark:to-zinc-800 p-4">
@@ -305,7 +346,14 @@ export default function GoalPage() {
                     <span className="text-4xl">{soloGoal.emoji || '🎯'}</span>
                     <div>
                       <CardTitle className="text-2xl">{soloGoal.name}</CardTitle>
-                      <CardDescription>Solo Goal</CardDescription>
+                      <CardDescription>
+                        Solo Goal
+                        {isNumericGoal && (
+                          <span className="ml-2 px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded">
+                            {soloGoal.goal_type === 'increasing' ? '📈 Increasing' : '📉 Decreasing'}
+                          </span>
+                        )}
+                      </CardDescription>
                     </div>
                   </div>
                 </div>
@@ -316,82 +364,254 @@ export default function GoalPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                <div className="text-center">
-                  <div className="flex items-center justify-center gap-2 mb-2">
-                    <Flame
-                      className={`w-5 h-5 ${
-                        streak > 0
-                          ? (checkedInToday
-                              ? 'text-orange-500'
-                              : 'text-gray-400 dark:text-gray-500')
-                          : 'text-gray-300 dark:text-gray-600'
-                      }`}
-                    />
-                    <span className={`text-2xl font-bold ${
-                      streak > 0 && checkedInToday ? 'text-orange-600 dark:text-orange-400' : ''
-                    }`}>{streak}</span>
+              {isNumericGoal ? (
+                <div className="space-y-4 mb-6">
+                  <div className="text-center">
+                    <div className="flex items-center justify-center gap-2 mb-2">
+                      <span className="text-3xl font-bold">
+                        {soloGoal.current_value} {soloGoal.unit}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-600 dark:text-white">Current Value</p>
                   </div>
-                  <p className="text-sm text-gray-600 dark:text-white">Day Streak</p>
-                </div>
-                <div className="text-center">
-                  <div className="flex items-center justify-center gap-2 mb-2">
-                    <Calendar className="w-5 h-5 text-blue-500" />
-                    <span className="text-2xl font-bold">{soloGoal.checkins.length}</span>
+                  
+                  <div className="space-y-4">
+                    <div className="flex justify-center">
+                      <div className="relative w-24 h-24">
+                        <svg className="w-24 h-24 transform -rotate-90" viewBox="0 0 100 100">
+                          <circle
+                            cx="50"
+                            cy="50"
+                            r="40"
+                            stroke="currentColor"
+                            strokeWidth="8"
+                            fill="none"
+                            className="text-gray-200 dark:text-gray-700"
+                          />
+                          <circle
+                            cx="50"
+                            cy="50"
+                            r="40"
+                            stroke="currentColor"
+                            strokeWidth="8"
+                            fill="none"
+                            strokeDasharray={`${2 * Math.PI * 40}`}
+                            strokeDashoffset={`${2 * Math.PI * 40 * (1 - progress.progress / 100)}`}
+                            className="text-blue-500 transition-all duration-300"
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <span className="text-lg font-bold">{Math.round(progress.progress)}%</span>
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-500 text-center">
+                      {progress.remaining > 0 
+                        ? `${progress.remaining} ${soloGoal.unit} remaining to reach ${soloGoal.target_value} ${soloGoal.unit}`
+                        : `Goal achieved! Target: ${soloGoal.target_value} ${soloGoal.unit}`
+                      }
+                    </p>
                   </div>
-                  <p className="text-sm text-gray-600 dark:text-white">Total Check-ins</p>
                 </div>
-              </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-4 mb-6">
+                    <div className="text-center">
+                      <div className="flex items-center justify-center gap-2 mb-2">
+                        <Flame
+                          className={`w-5 h-5 ${
+                            streak > 0
+                              ? (checkedInToday
+                                  ? 'text-orange-500'
+                                  : 'text-gray-400 dark:text-gray-500')
+                              : 'text-gray-300 dark:text-gray-600'
+                          }`}
+                        />
+                        <span className={`text-2xl font-bold ${
+                          streak > 0 && checkedInToday ? 'text-orange-600 dark:text-orange-400' : ''
+                        }`}>{streak}</span>
+                      </div>
+                      <p className="text-sm text-gray-600 dark:text-white">Current Streak</p>
+                    </div>
+                    <div className="text-center">
+                      <div className="flex items-center justify-center gap-2 mb-2">
+                        <Calendar className="w-5 h-5 text-blue-500" />
+                        <span className="text-2xl font-bold">{soloGoal.checkins.length}</span>
+                      </div>
+                      <p className="text-sm text-gray-600 dark:text-white">Total Check-ins</p>
+                    </div>
+                    <div className="text-center">
+                      <div className="flex items-center justify-center gap-2 mb-2">
+                        <Flame className="w-5 h-5 text-purple-500" />
+                        <span className="text-2xl font-bold">{highestStreak}</span>
+                      </div>
+                      <p className="text-sm text-gray-600 dark:text-white">Best Streak</p>
+                    </div>
+                  </div>
+              )}
 
               <div className="text-center">
-                {checkedInToday ? (
-                  <div className="space-y-4">
-                    <div className="text-6xl">✅</div>
-                    <p className="text-lg font-semibold text-green-600">
-                      Checked in for today!
-                    </p>
-                    <p className="text-sm text-gray-600 dark:text-white">
-                      Come back tomorrow to continue your streak.
-                    </p>
-                  </div>
+                {isNumericGoal ? (
+                  isCompleted ? (
+                    <div className="space-y-4">
+                      <div className="text-6xl">🎉</div>
+                      <p className="text-lg font-semibold text-green-600">
+                        Goal Achieved!
+                      </p>
+                      <p className="text-sm text-gray-600 dark:text-white">
+                        Congratulations! You've reached your target of {soloGoal.target_value} {soloGoal.unit}.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="text-6xl">📊</div>
+                      <p className="text-lg font-semibold">
+                        Update Progress
+                      </p>
+                      <Dialog open={showUpdateDialog} onOpenChange={setShowUpdateDialog}>
+                        <DialogTrigger asChild>
+                          <Button size="lg" className="w-full">
+                            Update Value
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Update {soloGoal.name}</DialogTitle>
+                            <DialogDescription>
+                              Enter your current value to track your progress.
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="space-y-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="newValue">Current Value ({soloGoal.unit})</Label>
+                              <Input
+                                id="newValue"
+                                type="number"
+                                placeholder="Enter current value"
+                                value={newValue}
+                                onChange={(e) => setNewValue(e.target.value)}
+                                autoFocus
+                              />
+                            </div>
+                            <div className="flex gap-2">
+                              <Button 
+                                onClick={handleNumericGoalUpdate} 
+                                disabled={!newValue.trim() || updatingValue}
+                                className="flex-1"
+                              >
+                                {updatingValue ? "Updating..." : "Update"}
+                              </Button>
+                              <Button 
+                                variant="outline" 
+                                onClick={() => setShowUpdateDialog(false)}
+                                className="flex-1"
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
+                  )
                 ) : (
-                  <div className="space-y-4">
-                    <div className="text-6xl">⏰</div>
-                    <p className="text-lg font-semibold">
-                      Ready to check in?
-                    </p>
-                    <Button onClick={handleSoloCheckin} size="lg" className="w-full">
-                      Check In for Today
-                    </Button>
-                  </div>
+                                     checkedInToday ? (
+                     <div className="space-y-4">
+                       <div className="flex justify-center">
+                         <img
+                           src={`/Stage_${Math.min(Math.max(streak, 1), 6)}.svg`}
+                           alt={`Seedling stage ${Math.min(Math.max(streak, 1), 6)}`}
+                           className="w-24 h-24"
+                         />
+                       </div>
+                       <p className="text-lg font-semibold text-green-600">
+                         Checked in for today!
+                       </p>
+                       <p className="text-sm text-gray-600 dark:text-white">
+                         {streak < 6 
+                           ? `${6 - streak} more day${6 - streak !== 1 ? 's' : ''} to grow to the next stage!`
+                           : "Your plant is fully grown! 🌱"
+                         }
+                       </p>
+                     </div>
+                   ) : (
+                     <div className="space-y-4">
+                       <div className="flex justify-center">
+                         <img
+                           src={`/Stage_${Math.min(Math.max(streak, 1), 6)}.svg`}
+                           alt={`Seedling stage ${Math.min(Math.max(streak, 1), 6)}`}
+                           className="w-24 h-24"
+                         />
+                       </div>
+                       <p className="text-lg font-semibold">
+                         Ready to check in?
+                       </p>
+                       <p className="text-sm text-gray-600 dark:text-white">
+                         {streak < 6 
+                           ? `Check in today to grow! ${6 - streak} more day${6 - streak !== 1 ? 's' : ''} to next stage.`
+                           : "Your plant is fully grown! 🌱"
+                         }
+                       </p>
+                       <Button onClick={handleSoloCheckin} size="lg" className="w-full">
+                         Check In for Today
+                       </Button>
+                     </div>
+                   )
                 )}
               </div>
             </CardContent>
           </Card>
 
-          {/* Recent Check-ins */}
+          {/* Recent Activity */}
           <Card>
             <CardHeader>
-              <CardTitle>Recent Check-ins</CardTitle>
+              <CardTitle>
+                {isNumericGoal ? "Recent Updates" : "Recent Check-ins"}
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              {soloGoal.checkins.length === 0 ? (
-                <p className="text-center text-gray-500 py-4">
-                  No check-ins yet. Start your streak today!
-                </p>
-              ) : (
+              {isNumericGoal ? (
                 <div className="space-y-2">
-                  {soloGoal.checkins
-                    .slice()
-                    .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
-                    .slice(0, 10)
-                    .map((date) => (
-                      <div key={date} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-b-0">
-                        <span>{new Date(date).toLocaleDateString()}</span>
-                        <span className="text-green-500">✅</span>
-                      </div>
-                    ))}
+                  <div className="flex items-center justify-between py-2 border-b border-gray-100 last:border-b-0">
+                    <span>Current Value</span>
+                    <span className="font-semibold">
+                      {soloGoal.current_value} {soloGoal.unit}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between py-2 border-b border-gray-100 last:border-b-0">
+                    <span>Target Value</span>
+                    <span className="font-semibold">
+                      {soloGoal.target_value} {soloGoal.unit}
+                    </span>
+                  </div>
+                  {soloGoal.start_value && (
+                    <div className="flex items-center justify-between py-2 border-b border-gray-100 last:border-b-0">
+                      <span>Starting Value</span>
+                      <span className="font-semibold">
+                        {soloGoal.start_value} {soloGoal.unit}
+                      </span>
+                    </div>
+                  )}
                 </div>
+              ) : (
+                soloGoal.checkins.length === 0 ? (
+                  <p className="text-center text-gray-500 py-4">
+                    No check-ins yet. Start your streak today!
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {soloGoal.checkins
+                      .slice()
+                      .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
+                      .slice(0, 10)
+                      .map((date) => (
+                        <div key={date} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-b-0">
+                          <span>{new Date(date).toLocaleDateString()}</span>
+                          <span className="text-green-500">✅</span>
+                        </div>
+                      ))}
+                  </div>
+                )
               )}
             </CardContent>
           </Card>
@@ -421,6 +641,7 @@ export default function GoalPage() {
   // Calculate group streak
   const groupStreakDates = groupStreaks.map(streak => streak.streak_date)
   const groupStreak = calculateGroupStreak(groupStreakDates)
+  const highestGroupStreak = calculateHighestGroupStreak(groupStreakDates)
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-zinc-900 dark:to-zinc-800 p-4">
@@ -493,33 +714,40 @@ export default function GoalPage() {
               </Badge>
             </div>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-4 mb-6">
-              <div className="text-center">
-                <div className="flex items-center justify-center gap-2 mb-2">
-                  <Flame
-                    className={`w-5 h-5 ${
-                      groupStreak > 0
-                        ? (userHasCheckedInToday
-                            ? 'text-orange-500'
-                            : 'text-gray-400 dark:text-gray-500')
-                        : 'text-gray-300 dark:text-gray-600'
-                    }`}
-                  />
-                  <span className={`text-2xl font-bold ${
-                    groupStreak > 0 && userHasCheckedInToday ? 'text-orange-600 dark:text-orange-400' : ''
-                  }`}>{groupStreak}</span>
+                     <CardContent>
+             <div className="grid grid-cols-3 gap-4 mb-6">
+                <div className="text-center">
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <Flame
+                      className={`w-5 h-5 ${
+                        groupStreak > 0
+                          ? (userHasCheckedInToday
+                              ? 'text-orange-500'
+                              : 'text-gray-400 dark:text-gray-500')
+                          : 'text-gray-300 dark:text-gray-600'
+                      }`}
+                    />
+                    <span className={`text-2xl font-bold ${
+                      groupStreak > 0 && userHasCheckedInToday ? 'text-orange-600 dark:text-orange-400' : ''
+                    }`}>{groupStreak}</span>
+                  </div>
+                  <p className="text-sm text-gray-600 dark:text-white">Current Streak</p>
                 </div>
-                <p className="text-sm text-gray-600 dark:text-white">Group Streak</p>
-              </div>
-              <div className="text-center">
-                <div className="flex items-center justify-center gap-2 mb-2">
-                  <Users className="w-5 h-5 text-blue-500" />
-                  <span className="text-2xl font-bold">{participants.length}/{groupGoal.max_participants}</span>
+                <div className="text-center">
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <Users className="w-5 h-5 text-blue-500" />
+                    <span className="text-2xl font-bold">{participants.length}/{groupGoal.max_participants}</span>
+                  </div>
+                  <p className="text-sm text-gray-600 dark:text-white">Members</p>
                 </div>
-                <p className="text-sm text-gray-600 dark:text-white">Members</p>
+                <div className="text-center">
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <Flame className="w-5 h-5 text-purple-500" />
+                    <span className="text-2xl font-bold">{highestGroupStreak}</span>
+                  </div>
+                  <p className="text-sm text-gray-600 dark:text-white">Best Streak</p>
+                </div>
               </div>
-            </div>
             
             <div className="flex justify-center mb-6">
               <Button variant="outline" onClick={copyGoalCode} size="sm">
@@ -528,29 +756,53 @@ export default function GoalPage() {
               </Button>
             </div>
 
-            <div className="text-center mb-6">
-              {userHasCheckedInToday ? (
-                <div className="space-y-4">
-                  <div className="text-6xl">✅</div>
-                  <p className="text-lg font-semibold text-green-600">
-                    You've checked in for today!
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    {todayCheckins.length}/{participants.length} members have checked in today
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="text-6xl">⏰</div>
-                  <p className="text-lg font-semibold">
-                    Ready to check in?
-                  </p>
-                  <Button onClick={handleGroupCheckin} size="lg" className="w-full" disabled={checkingIn}>
-                    {checkingIn ? "Checking in..." : "Check In for Today"}
-                  </Button>
-                </div>
-              )}
-            </div>
+                         <div className="text-center mb-6">
+               {userHasCheckedInToday ? (
+                 <div className="space-y-4">
+                   <div className="flex justify-center">
+                     <img
+                       src={`/Stage_${Math.min(Math.max(groupStreak, 1), 6)}.svg`}
+                       alt={`Seedling stage ${Math.min(Math.max(groupStreak, 1), 6)}`}
+                       className="w-24 h-24"
+                     />
+                   </div>
+                   <p className="text-lg font-semibold text-green-600">
+                     You've checked in for today!
+                   </p>
+                   <p className="text-sm text-gray-600">
+                     {todayCheckins.length}/{participants.length} members have checked in today
+                   </p>
+                   <p className="text-sm text-gray-600">
+                     {groupStreak < 6 
+                       ? `${6 - groupStreak} more day${6 - groupStreak !== 1 ? 's' : ''} to grow to the next stage!`
+                       : "Your group plant is fully grown! 🌱"
+                     }
+                   </p>
+                 </div>
+               ) : (
+                 <div className="space-y-4">
+                   <div className="flex justify-center">
+                     <img
+                       src={`/Stage_${Math.min(Math.max(groupStreak, 1), 6)}.svg`}
+                       alt={`Seedling stage ${Math.min(Math.max(groupStreak, 1), 6)}`}
+                       className="w-24 h-24"
+                     />
+                   </div>
+                   <p className="text-lg font-semibold">
+                     Ready to check in?
+                   </p>
+                   <p className="text-sm text-gray-600">
+                     {groupStreak < 6 
+                       ? `Check in today to grow! ${6 - groupStreak} more day${6 - groupStreak !== 1 ? 's' : ''} to next stage.`
+                       : "Your group plant is fully grown! 🌱"
+                     }
+                   </p>
+                   <Button onClick={handleGroupCheckin} size="lg" className="w-full" disabled={checkingIn}>
+                     {checkingIn ? "Checking in..." : "Check In for Today"}
+                   </Button>
+                 </div>
+               )}
+             </div>
           </CardContent>
         </Card>
 

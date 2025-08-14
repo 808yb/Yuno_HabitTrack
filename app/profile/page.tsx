@@ -52,14 +52,16 @@ export default function ProfilePage() {
       setUserIdentity(newIdentity)
       setUserIdentityState(newIdentity)
 
-      // If Supabase is configured, update all group goal participations
-      if (isSupabaseConfigured() && supabase && userIdentity.nickname !== newIdentity.nickname) {
+      // If Supabase is configured, update all group goal participations to reflect new identity
+      if (isSupabaseConfigured() && supabase) {
+        const updates: { nickname?: string; emoji: string } = { emoji: newIdentity.emoji }
+        if (userIdentity.nickname !== newIdentity.nickname) {
+          updates.nickname = newIdentity.nickname
+        }
+
         const { error } = await supabase
           .from('participants')
-          .update({ 
-            nickname: newIdentity.nickname,
-            emoji: newIdentity.emoji 
-          })
+          .update(updates)
           .eq('nickname', userIdentity.nickname)
 
         if (error) {
