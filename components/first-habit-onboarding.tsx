@@ -224,16 +224,16 @@ export function FirstHabitOnboarding({ onComplete, userIdentity }: FirstHabitOnb
             </div>
 
             {/* Examples */}
-            <div className="text-center p-4 bg-gradient-to-r from-purple-50 to-pink-50 dark:bg-zinc-800 rounded-lg border border-purple-200 dark:border-zinc-700">
+            <div className="text-center p-4 dark:bg-zinc-800 rounded-lg">
               <p className="text-sm text-purple-800 dark:text-purple-300 mb-3 font-semibold">
                 💡 Try these examples:
               </p>
               <div className="flex flex-wrap gap-2 justify-center">
                 {[
-                  { text: "Morning yoga", color: "bg-green-100 text-green-800 border-green-300 dark:bg-emerald-950/20 dark:text-emerald-300 dark:border-emerald-700" },
-                  { text: "Learn Spanish", color: "bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-950/20 dark:text-blue-300 dark:border-blue-700" },
-                  { text: "No social media", color: "bg-red-100 text-red-800 border-red-300 dark:bg-red-950/20 dark:text-red-300 dark:border-red-700" },
-                  { text: "Drink green tea", color: "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/20 dark:text-emerald-300 dark:border-emerald-700" }
+                  { text: "Morning yoga", color: "bg-green-200 text-green-900 border-green-400 dark:bg-emerald-950/20 dark:text-emerald-300 dark:border-emerald-700" },
+                  { text: "Learn Spanish", color: "bg-blue-200 text-blue-900 border-blue-400 dark:bg-blue-950/20 dark:text-blue-300 dark:border-blue-700" },
+                  { text: "No social media", color: "bg-red-200 text-red-900 border-red-400 dark:bg-red-950/20 dark:text-red-300 dark:border-red-700" },
+                  { text: "Drink green tea", color: "bg-emerald-200 text-emerald-900 border-emerald-400 dark:bg-emerald-950/20 dark:text-emerald-300 dark:border-emerald-700" }
                 ].map((example) => (
                   <button
                     key={example.text}
