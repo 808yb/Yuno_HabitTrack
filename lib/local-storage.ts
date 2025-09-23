@@ -23,6 +23,7 @@ export interface SoloGoal {
 
 const USER_IDENTITY_KEY = 'yuno_user_identity'
 const SOLO_GOALS_KEY = 'yuno_solo_goals'
+const XP_STATE_KEY = 'yuno_xp_state'
 
 // Utility functions
 const getTodayDate = (): string => {
@@ -174,8 +175,28 @@ const addCheckinToSoloGoal = (goalId: string): void => {
   
   if (goal && !hasCheckedInToday(goal)) { // Use hasCheckedInToday here
     const today = getTodayDate() // Use getTodayDate here
+    const prevCount = goal.checkins.length
     goal.checkins.push(today)
     setSoloGoals(goals)
+
+    // Award XP for habit completion according to rules
+    try {
+      awardXpForSoloCheckin(goal)
+      // Perfect day bonus: all habit-type goals checked in today
+      const allHabitGoals = goals.filter(g => !g.goal_type || g.goal_type === 'habit')
+      if (allHabitGoals.length > 0 && allHabitGoals.every(g => hasCheckedInToday(g))) {
+        const bonus = 20 + Math.floor(Math.random() * 31) // 20-50 inclusive
+        addXp(bonus)
+      }
+      // Time-limited habit completion bonus
+      if (goal.duration_days && goal.duration_days > 0) {
+        // Trigger only when just reached completion
+        if (prevCount + 1 === goal.duration_days) {
+          if (goal.duration_days === 7) addXp(50)
+          if (goal.duration_days === 14) addXp(100)
+        }
+      }
+    } catch {}
   }
 }
 
@@ -200,8 +221,14 @@ const updateNumericGoalValue = (goalId: string, newValue: number): void => {
   const goal = goals.find(g => g.id === goalId)
   
   if (goal && (goal.goal_type === 'increasing' || goal.goal_type === 'decreasing')) {
+    const wasCompleted = isNumericGoalCompleted(goal)
     goal.current_value = newValue
     setSoloGoals(goals)
+    const nowCompleted = isNumericGoalCompleted(goal)
+    if (!wasCompleted && nowCompleted) {
+      // Completion bonus for increasing/decreasing goals
+      addXp(100)
+    }
   }
 }
 
@@ -243,6 +270,70 @@ const getNumericGoalProgress = (goal: SoloGoal): { progress: number; remaining: 
   }
   
   return { progress, remaining }
+}
+
+// =====================
+// XP SYSTEM - LOCAL ONLY
+// =====================
+
+interface XpState { xp: number }
+
+const getXpState = (): XpState => {
+  if (typeof window === 'undefined') return { xp: 0 }
+  const raw = localStorage.getItem(XP_STATE_KEY)
+  return raw ? JSON.parse(raw) as XpState : { xp: 0 }
+}
+
+const setXpState = (state: XpState): void => {
+  if (typeof window === 'undefined') return
+  localStorage.setItem(XP_STATE_KEY, JSON.stringify(state))
+}
+
+const addXp = (amount: number): void => {
+  if (!Number.isFinite(amount)) return
+  const current = getXpState()
+  const next = { xp: Math.max(0, Math.floor(current.xp + amount)) }
+  setXpState(next)
+}
+
+// Leveling: level 1 requires 100 xp, each level requirement grows by 1.2x
+const getLevelRequirement = (level: number): number => {
+  if (level <= 1) return 100
+  // requirement for this level (not cumulative)
+  return Math.round(100 * Math.pow(1.2, level - 1))
+}
+
+const getLevelInfoFromXp = (totalXp: number): { level: number; currentLevelXp: number; nextLevelRequirement: number; progressPercent: number } => {
+  let level = 1
+  let remainingXp = Math.max(0, Math.floor(totalXp))
+  while (true) {
+    const req = getLevelRequirement(level)
+    if (remainingXp < req) {
+      const progressPercent = req === 0 ? 0 : Math.min(100, Math.max(0, (remainingXp / req) * 100))
+      return { level, currentLevelXp: req - Math.max(0, req - remainingXp), nextLevelRequirement: req, progressPercent }
+    }
+    remainingXp -= req
+    level += 1
+    if (level > 9999) {
+      return { level: 9999, currentLevelXp: 0, nextLevelRequirement: getLevelRequirement(9999), progressPercent: 0 }
+    }
+  }
+}
+
+const getStreakXpMultiplier = (streak: number): number => {
+  if (streak >= 100) return 2.5
+  if (streak >= 30) return 2
+  if (streak >= 7) return 1.5
+  return 1
+}
+
+const awardXpForSoloCheckin = (goal: SoloGoal): void => {
+  // Base points: 10 per completed habit
+  // Apply streak-based multiplier
+  const streak = calculateStreak(goal.checkins)
+  const multiplier = getStreakXpMultiplier(streak)
+  const gained = Math.round(10 * multiplier)
+  addXp(gained)
 }
 
 // Group streak functions
@@ -358,4 +449,8 @@ export {
   updateNumericGoalValue,
   isNumericGoalCompleted,
   getNumericGoalProgress,
+  // XP
+  getXpState,
+  addXp,
+  getLevelInfoFromXp,
 }

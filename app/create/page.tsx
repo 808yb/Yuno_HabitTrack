@@ -106,7 +106,7 @@ export default function CreateGoalPage() {
     setLoading(true)
 
     try {
-      const limitedName = goalName.trim().slice(0, 10)
+      const limitedName = goalName.trim().slice(0, 55)
       if (goalType === "solo") {
         // Create solo goal locally
         const goalData: any = {
@@ -211,7 +211,7 @@ export default function CreateGoalPage() {
                   placeholder="e.g., Daily Exercise, Read 30 minutes"
                   value={goalName}
                   onChange={(e) => setGoalName(e.target.value)}
-                  maxLength={25}
+                  maxLength={55}
                   className="text-base"
                   required
                   autoFocus

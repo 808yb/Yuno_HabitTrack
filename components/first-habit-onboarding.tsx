@@ -64,7 +64,7 @@ export function FirstHabitOnboarding({ onComplete, userIdentity }: FirstHabitOnb
 
     try {
       const emojiToUse = selectedSuggestionObj?.emoji ?? selectedEmoji
-      const limitedName = habitName.trim().slice(0, 10)
+      const limitedName = habitName.trim().slice(0, 55)
       const goal = addSoloGoal({
         name: limitedName,
         type: "solo",
@@ -178,7 +178,7 @@ export function FirstHabitOnboarding({ onComplete, userIdentity }: FirstHabitOnb
                 placeholder="e.g., Walk 10,000 steps, Practice guitar..."
                 value={habitName}
                 onChange={(e) => setHabitName(e.target.value)}
-                maxLength={10}
+                maxLength={55}
                 className="text-base"
                 autoFocus
               />

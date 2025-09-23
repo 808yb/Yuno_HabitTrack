@@ -6,9 +6,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { getUserIdentity, getSoloGoals, type UserIdentity, type SoloGoal, hasCheckedInToday, calculateStreak, calculateGroupStreak, addCheckinToSoloGoal, getTodayDate, checkAndUpdateGroupStreak, deleteSoloGoal, addSoloGoal, isNumericGoalCompleted, getNumericGoalProgress, updateNumericGoalValue } from "@/lib/local-storage"
+import { getUserIdentity, getSoloGoals, type UserIdentity, type SoloGoal, hasCheckedInToday, calculateStreak, calculateGroupStreak, addCheckinToSoloGoal, getTodayDate, checkAndUpdateGroupStreak, deleteSoloGoal, addSoloGoal, isNumericGoalCompleted, getNumericGoalProgress, updateNumericGoalValue, getXpState, getLevelInfoFromXp, addXp } from "@/lib/local-storage"
 import { supabase, type Goal, type Participant, type GroupStreak, isSupabaseConfigured } from "@/lib/supabase"
-import { Plus, Users, User, Target, Flame, Menu, X, Sun, Moon, Check } from 'lucide-react'
+import { Plus, Users, User, Target, Flame, Menu, X, Sun, Moon, Check, Trophy } from 'lucide-react'
 import { useTheme } from "next-themes"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -17,6 +17,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { FirstHabitOnboarding } from "@/components/first-habit-onboarding"
 import Image from "next/image"
+import { Progress } from "@/components/ui/progress"
 
 export default function HomePage() {
   const router = useRouter()
@@ -53,6 +54,11 @@ export default function HomePage() {
   const [isMobile, setIsMobile] = useState(false)
   const [showFab, setShowFab] = useState(true)
   const lastScrollYRef = useRef(0)
+  const [xp, setXp] = useState<number>(0)
+  const [levelInfo, setLevelInfo] = useState<{ level: number; currentLevelXp: number; nextLevelRequirement: number; progressPercent: number } | null>(null)
+  const [leaderboard, setLeaderboard] = useState<Array<{ name: string; emoji: string; level: number; totalXp: number; progressPercent: number }>>([])
+  const LEADERBOARD_KEY = 'yuno_dummy_leaderboard'
+  const [showLeaderboard, setShowLeaderboard] = useState(false)
   const EMOJI_OPTIONS = [
     '🎯', '💪', '🏃‍♂️', '🧘‍♀️', '📚', '💻', '🎨', '🎵', '🍎', '💧',
     '😴', '🏋️‍♂️', '🚴‍♂️', '🏊‍♀️', '🧠', '💡', '⭐', '🔥', '💎', '🌟'
@@ -74,6 +80,9 @@ export default function HomePage() {
       
       // Load group goals where user is a participant
       loadGroupGoals(identity.nickname)
+
+      // Load XP
+      refreshXp()
     } else {
       setLoading(false)
     }
@@ -84,6 +93,28 @@ export default function HomePage() {
       setLoading(false)
     }
   }, [userIdentity])
+
+  // Keep user row (#2) in leaderboard updated as XP/level change
+  useEffect(() => {
+    if (!userIdentity || !levelInfo) return
+    try {
+      const raw = localStorage.getItem(LEADERBOARD_KEY)
+      if (!raw) return
+      const parsed = JSON.parse(raw)
+      if (!Array.isArray(parsed) || parsed.length < 2) return
+      const updated = [...parsed]
+      updated[1] = {
+        ...updated[1],
+        name: `${userIdentity.nickname} (You)`,
+        emoji: userIdentity.emoji,
+        level: levelInfo.level,
+        totalXp: xp,
+        progressPercent: levelInfo.progressPercent,
+      }
+      setLeaderboard(updated)
+      localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(updated))
+    } catch {}
+  }, [xp, levelInfo, userIdentity])
 
   // Mobile detection
   useEffect(() => {
@@ -96,6 +127,101 @@ export default function HomePage() {
     
     return () => window.removeEventListener('resize', checkMobile)
   }, [])
+
+  const refreshXp = () => {
+    const state = getXpState()
+    setXp(state.xp)
+    setLevelInfo(getLevelInfoFromXp(state.xp))
+  }
+
+  // Leaderboard generation helpers (dummy data)
+  const requirementForLevel = (lvl: number) => Math.round(100 * Math.pow(1.2, Math.max(0, lvl - 1)))
+  const cumulativeXpForLevelStart = (lvl: number) => {
+    // total xp required to reach the start of this level
+    let total = 0
+    for (let i = 1; i < lvl; i++) {
+      total += requirementForLevel(i)
+    }
+    return total
+  }
+  const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n))
+
+  useEffect(() => {
+    if (!userIdentity) return
+    // Try to load cached leaderboard
+    const loadCached = () => {
+      try {
+        const raw = typeof window !== 'undefined' ? localStorage.getItem(LEADERBOARD_KEY) : null
+        if (raw) {
+          const parsed = JSON.parse(raw)
+          if (Array.isArray(parsed) && parsed.length >= 6) {
+            setLeaderboard(parsed)
+            return true
+          }
+        }
+      } catch {}
+      return false
+    }
+    if (loadCached()) return
+
+    // Generate once and cache
+    const baseLevel = levelInfo ? levelInfo.level : 1
+    const baseXp = xp
+    const candidates = [
+      { name: 'Darth Vader', emoji: '🖤' },
+      { name: 'Indiana Jones', emoji: '🤠' },
+      { name: 'Ellen Ripley', emoji: '👩‍🚀' },
+      { name: 'James Bond', emoji: '🕶️' },
+      { name: 'Hermione Granger', emoji: '🪄' },
+      { name: 'Gandalf', emoji: '🧙‍♂️' },
+      { name: 'Neo', emoji: '🕳️' },
+      { name: 'Lara Croft', emoji: '🏹' },
+      { name: 'Rocky Balboa', emoji: '🥊' },
+      { name: 'John Wick', emoji: '🗡️' },
+    ]
+    // pick 5 unique random characters
+    const shuffled = [...candidates].sort(() => Math.random() - 0.5)
+    const picks = shuffled.slice(0, 5)
+
+    // Build entries: #1 slightly higher level, user #2, others lower/around
+    const userEntry = {
+      name: `${userIdentity.nickname} (You)`,
+      emoji: userIdentity.emoji,
+      level: baseLevel,
+      totalXp: baseXp,
+      progressPercent: levelInfo ? levelInfo.progressPercent : 0,
+    }
+
+    const topLevel = baseLevel + clamp(Math.round(Math.random() * 3) + 1, 1, 4)
+    const topReq = requirementForLevel(topLevel)
+    const topBase = cumulativeXpForLevelStart(topLevel)
+    const topProgress = clamp(20 + Math.random() * 60, 0, 99.9)
+    const topTotal = Math.floor(topBase + (topReq * topProgress) / 100)
+
+    const rest = picks.map((p, idx) => {
+      const delta = [-2, -1, -1, 0, -3][idx % 5]
+      const lvl = clamp(baseLevel + delta + Math.round(Math.random() * 1), 1, Math.max(2, baseLevel + 1))
+      const req = requirementForLevel(lvl)
+      const base = cumulativeXpForLevelStart(lvl)
+      const prog = clamp(10 + Math.random() * 80, 0, 99.9)
+      const total = Math.floor(base + (req * prog) / 100)
+      return { name: p.name, emoji: p.emoji, level: lvl, totalXp: total, progressPercent: prog }
+    })
+
+    const entries = [
+      // rank 1
+      { name: picks[0].name, emoji: picks[0].emoji, level: topLevel, totalXp: topTotal, progressPercent: topProgress },
+      // rank 2 user
+      userEntry,
+      // rank 3-6
+      ...rest.slice(1, 5),
+    ]
+
+    setLeaderboard(entries)
+    try {
+      localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(entries))
+    } catch {}
+  }, [userIdentity])
 
   // Hide mobile FAB when scrolling down; show when scrolling up
   useEffect(() => {
@@ -223,6 +349,8 @@ export default function HomePage() {
       addCheckinToSoloGoal(goalId)
       const updated = getSoloGoals()
       setSoloGoals(updated)
+      // XP changed on check-in
+      refreshXp()
     } finally {
       setLoggingSoloGoalIds(prev => {
         const done = new Set(prev)
@@ -275,6 +403,9 @@ export default function HomePage() {
       // Refresh solo goals data
       const updated = getSoloGoals()
       setSoloGoals(updated)
+
+      // XP may change upon completion
+      refreshXp()
       
       setNewValue("")
       setShowUpdateDialog(false)
@@ -361,6 +492,15 @@ export default function HomePage() {
         checked.add(goal.id)
         return checked
       })
+
+      // Coop bonus: if at least one partner also checked in today
+      try {
+        const anyPartnerChecked = (todaysCheckins || []).some(ci => ci.participant_id !== participant.id)
+        if (anyPartnerChecked) {
+          addXp(5)
+          refreshXp()
+        }
+      } catch {}
     } catch (e) {
       console.error('Error checking in:', e)
       alert('Failed to check in. Please try again.')
@@ -390,8 +530,10 @@ export default function HomePage() {
         <Card className="w-full max-w-md mx-auto">
           <CardHeader className="text-center">
             <div className="text-6xl mb-4">🎯</div>
-            <CardTitle className="text-2xl">Welcome to Yuno</CardTitle>
-            <CardDescription>
+            <CardTitle className="text-2x1">Welcome to Yuno</CardTitle>
+            <CardDescription
+              className="text-sm text-10px text-gray-500"
+            >
               Yuno you gotta check in. A gamified habit tracker for you and your friends.
             </CardDescription>
           </CardHeader>
@@ -428,9 +570,15 @@ export default function HomePage() {
             />
             <div>
               <h1 className="text-xl sm:text-2xl font-bold text-foreground">Yuno</h1>
-              <p className="text-xs sm:text-sm text-muted-foreground truncate max-w-[150px] sm:max-w-none">
-                Hey {userIdentity.emoji} {userIdentity.nickname}!
-              </p>
+              <p className="text-xs sm:text-sm text-muted-foreground truncate max-w-[150px] sm:max-w-none">Hey {userIdentity.emoji} {userIdentity.nickname}!</p>
+              {levelInfo && (
+                <div className="mt-1 flex items-center gap-2">
+                  <span className="text-[10px] sm:text-xs font-semibold">Lvl {levelInfo.level}</span>
+                  <div className="w-24 sm:w-36">
+                    <Progress value={levelInfo.progressPercent} />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           
@@ -448,6 +596,14 @@ export default function HomePage() {
                 Join Goal
               </Button>
             </Link>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setShowLeaderboard(true)}
+            >
+              <Trophy className="w-4 h-4 mr-2" />
+              Leaderboard
+            </Button>
             <Button
               variant="secondary"
               size="sm"
@@ -548,6 +704,17 @@ export default function HomePage() {
                     <Button
                       variant="secondary"
                       className="w-full justify-start"
+                      onClick={() => {
+                        setShowMobileMenu(false)
+                        setShowLeaderboard(true)
+                      }}
+                    >
+                      <Trophy className="w-4 h-4 mr-2" />
+                      Leaderboard
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      className="w-full justify-start"
                       disabled={isTogglingTheme}
                       onClick={() => {
                         if (isTogglingTheme || isDarkVisual === null) return
@@ -592,6 +759,7 @@ export default function HomePage() {
 
         {/* Goals Grid */}
         <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+          {/* Leaderboard moved to modal */}
           {/* Solo Goals */}
           {soloGoals.map((goal) => {
             const streak = calculateStreak(goal.checkins)
@@ -661,23 +829,28 @@ export default function HomePage() {
                     className="hover:shadow-lg transition-shadow cursor-pointer h-full will-change-transform relative"
                     style={{ transform: isActiveSwipe ? `translateX(${swipeOffsetX}px)` : undefined, transition: !isActiveSwipe ? 'transform 150ms ease-out' : undefined }}
                   >
-                  <CardHeader className="pb-1">
+                  {/* Type badge in top-right */}
+                  <div className="absolute top-2 right-2 z-10">
+                    <Badge variant="secondary" className="shrink-0">
+                      <User className="w-3 h-3 mr-1" />
+                      Solo
+                    </Badge>
+                  </div>
+                  <CardHeader className="pb-1 pr-16">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 min-w-0 flex-1">
                         <span className="text-2xl">{goal.emoji || '🎯'}</span>
-                        <div className="flex items-center gap-3 min-w-0">
-                          <CardTitle className="text-base sm:text-lg truncate pr-2">{goal.name}</CardTitle>
-                          <div className="flex gap-1 shrink-0">
-                            <Badge variant="secondary" className="shrink-0">
-                              <User className="w-3 h-3 mr-1" />
-                              Solo
-                            </Badge>
-                            {isNumericGoal && (
+                        <div className="flex items-start gap-3 min-w-0 flex-1">
+                          <CardTitle className="text-base sm:text-lg pr-2 min-w-0 flex-1 whitespace-normal break-words leading-tight">
+                            {goal.name}
+                          </CardTitle>
+                          {isNumericGoal && (
+                            <div className="flex gap-1 shrink-0">
                               <Badge variant="outline" className="shrink-0 text-xs">
                                 {goal.goal_type === 'increasing' ? '📈' : '📉'}
                               </Badge>
-                            )}
-                          </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     
@@ -937,16 +1110,20 @@ export default function HomePage() {
             return (
               <Link key={goal.id} href={`/goal/${goal.id}`} prefetch={false}>
                 <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full relative">
-                  <CardHeader className="pb-1">
+                  {/* Type badge in top-right */}
+                  <div className="absolute top-2 right-2 z-10">
+                    <Badge variant="secondary" className="shrink-0">
+                      <Users className="w-3 h-3 mr-1" />
+                      Group
+                    </Badge>
+                  </div>
+                  <CardHeader className="pb-1 pr-16">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 min-w-0 flex-1">
                         <span className="text-2xl">{goal.emoji || '🎯'}</span>
-                        <div className="flex items-center gap-3 min-w-0">
-                          <CardTitle className="text-base sm:text-lg truncate pr-2">{goal.name}</CardTitle>
-                          <Badge variant="secondary" className="shrink-0">
-                            <Users className="w-3 h-3 mr-1" />
-                            Group
-                          </Badge>
+                        <div className="flex items-start gap-3 min-w-0 flex-1">
+                        <CardTitle className="text-base sm:text-lg pr-2 min-w-0 flex-1 whitespace-normal break-words leading-tight">
+{goal.name}</CardTitle>
                         </div>
                       </div>
                       <div className="flex items-center gap-3 shrink-0">
@@ -1068,12 +1245,12 @@ export default function HomePage() {
             <div className="px-4 space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="quickGoalName">Goal Name</Label>
-                <Input
+                  <Input
                   id="quickGoalName"
                   placeholder="e.g., Read 20m"
                   value={quickGoalName}
                   onChange={(e) => setQuickGoalName(e.target.value)}
-                  maxLength={54}
+                  maxLength={55}
                 />
               </div>
               <div className="space-y-2">
@@ -1102,7 +1279,7 @@ export default function HomePage() {
                   setQuickCreating(true)
                   try {
                     const goal = addSoloGoal({
-                      name: quickGoalName.trim().slice(0, 54),
+                      name: quickGoalName.trim().slice(0, 55),
                       type: 'solo',
                       duration_days: null,
                       checkins: [],
@@ -1247,6 +1424,38 @@ export default function HomePage() {
                   Cancel
                 </Button>
               </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Leaderboard Dialog */}
+        <Dialog open={showLeaderboard} onOpenChange={setShowLeaderboard}>
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2"><Trophy className="w-5 h-5" /> Leaderboard</DialogTitle>
+              <DialogDescription>Legendary lineup (dummy data)</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              {leaderboard.map((entry, idx) => (
+                <div key={`${entry.name}-${idx}`} className={`flex items-center gap-3 p-2 rounded-md ${idx === 1 ? 'bg-primary/5' : 'bg-transparent'}`}>
+                  <div className="w-6 text-sm font-bold text-muted-foreground">{idx + 1}</div>
+                  <div className="w-8 h-8 rounded-full bg-white dark:bg-zinc-800 border border-black/10 dark:border-white/10 flex items-center justify-center">
+                    <span className="text-base">{entry.emoji}</span>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="truncate font-semibold text-sm">{entry.name}</div>
+                      <Badge variant="secondary" className="shrink-0">Lvl {entry.level}</Badge>
+                    </div>
+                    <div className="mt-1 flex items-center gap-2">
+                      <div className="w-44 sm:w-64">
+                        <Progress value={entry.progressPercent} />
+                      </div>
+                      <div className="text-[10px] sm:text-xs text-muted-foreground truncate">XP {entry.totalXp.toLocaleString()}</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </DialogContent>
         </Dialog>

@@ -517,40 +517,14 @@ export default function GoalPage() {
                 ) : (
                                      checkedInToday ? (
                      <div className="space-y-4">
-                       <div className="flex justify-center">
-                         <img
-                           src={`/Stage_${Math.min(Math.max(streak, 1), 6)}.svg`}
-                           alt={`Seedling stage ${Math.min(Math.max(streak, 1), 6)}`}
-                           className="w-24 h-24"
-                         />
-                       </div>
                        <p className="text-lg font-semibold text-green-600">
                          Checked in for today!
-                       </p>
-                       <p className="text-sm text-gray-600 dark:text-white">
-                         {streak < 6 
-                           ? `${6 - streak} more day${6 - streak !== 1 ? 's' : ''} to grow to the next stage!`
-                           : "Your plant is fully grown! 🌱"
-                         }
                        </p>
                      </div>
                    ) : (
                      <div className="space-y-4">
-                       <div className="flex justify-center">
-                         <img
-                           src={`/Stage_${Math.min(Math.max(streak, 1), 6)}.svg`}
-                           alt={`Seedling stage ${Math.min(Math.max(streak, 1), 6)}`}
-                           className="w-24 h-24"
-                         />
-                       </div>
                        <p className="text-lg font-semibold">
                          Ready to check in?
-                       </p>
-                       <p className="text-sm text-gray-600 dark:text-white">
-                         {streak < 6 
-                           ? `Check in today to grow! ${6 - streak} more day${6 - streak !== 1 ? 's' : ''} to next stage.`
-                           : "Your plant is fully grown! 🌱"
-                         }
                        </p>
                        <Button onClick={handleSoloCheckin} size="lg" className="w-full">
                          Check In for Today
@@ -758,43 +732,17 @@ export default function GoalPage() {
                          <div className="text-center mb-6">
                {userHasCheckedInToday ? (
                  <div className="space-y-4">
-                   <div className="flex justify-center">
-                     <img
-                       src={`/Stage_${Math.min(Math.max(groupStreak, 1), 6)}.svg`}
-                       alt={`Seedling stage ${Math.min(Math.max(groupStreak, 1), 6)}`}
-                       className="w-24 h-24"
-                     />
-                   </div>
                    <p className="text-lg font-semibold text-green-600">
                      You've checked in for today!
                    </p>
                    <p className="text-sm text-gray-600">
                      {todayCheckins.length}/{participants.length} members have checked in today
                    </p>
-                   <p className="text-sm text-gray-600">
-                     {groupStreak < 6 
-                       ? `${6 - groupStreak} more day${6 - groupStreak !== 1 ? 's' : ''} to grow to the next stage!`
-                       : "Your group plant is fully grown! 🌱"
-                     }
-                   </p>
                  </div>
                ) : (
                  <div className="space-y-4">
-                   <div className="flex justify-center">
-                     <img
-                       src={`/Stage_${Math.min(Math.max(groupStreak, 1), 6)}.svg`}
-                       alt={`Seedling stage ${Math.min(Math.max(groupStreak, 1), 6)}`}
-                       className="w-24 h-24"
-                     />
-                   </div>
                    <p className="text-lg font-semibold">
                      Ready to check in?
-                   </p>
-                   <p className="text-sm text-gray-600">
-                     {groupStreak < 6 
-                       ? `Check in today to grow! ${6 - groupStreak} more day${6 - groupStreak !== 1 ? 's' : ''} to next stage.`
-                       : "Your group plant is fully grown! 🌱"
-                     }
                    </p>
                    <Button onClick={handleGroupCheckin} size="lg" className="w-full" disabled={checkingIn}>
                      {checkingIn ? "Checking in..." : "Check In for Today"}

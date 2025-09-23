@@ -43,7 +43,7 @@ export function GoalManagement({ goalId, goalName, goalEmoji, isSoloGoal, onUpda
     setIsUpdating(true)
     
     try {
-      const limitedName = newName.trim().slice(0, 10)
+      const limitedName = newName.trim().slice(0, 55)
       if (isSoloGoal) {
         const { renameSoloGoal } = await import("@/lib/local-storage")
         renameSoloGoal(goalId, limitedName)
@@ -226,7 +226,7 @@ export function GoalManagement({ goalId, goalName, goalEmoji, isSoloGoal, onUpda
                   onChange={(e) => setNewName(e.target.value)}
                   placeholder="Enter goal name"
                   className="mt-1"
-                  maxLength={10}
+                  maxLength={55}
                 />
               </div>
             </div>
