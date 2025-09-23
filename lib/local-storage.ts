@@ -26,7 +26,11 @@ const SOLO_GOALS_KEY = 'yuno_solo_goals'
 
 // Utility functions
 const getTodayDate = (): string => {
-  return new Date().toISOString().split('T')[0]
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = String(now.getMonth() + 1).padStart(2, '0')
+  const d = String(now.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
 }
 
 // Memoized date parsing to avoid repeated Date object creation

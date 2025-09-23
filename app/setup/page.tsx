@@ -77,7 +77,7 @@ export default function SetupPage() {
 
             <div className="text-center">
               <div className="text-3xl sm:text-4xl mb-2">{selectedEmoji}</div>
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-white -600">
                 You'll be known as <strong>{selectedEmoji} {nickname || 'Your Nickname'}</strong>
               </p>
             </div>

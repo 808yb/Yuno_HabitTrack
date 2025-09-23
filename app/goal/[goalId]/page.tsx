@@ -422,13 +422,13 @@ export default function GoalPage() {
                           className={`w-5 h-5 ${
                             streak > 0
                               ? (checkedInToday
-                                  ? 'text-orange-500'
+                                  ? 'text-[#6A994E]'
                                   : 'text-gray-400 dark:text-gray-500')
                               : 'text-gray-300 dark:text-gray-600'
                           }`}
                         />
                         <span className={`text-2xl font-bold ${
-                          streak > 0 && checkedInToday ? 'text-orange-600 dark:text-orange-400' : ''
+                          streak > 0 && checkedInToday ? 'text-[#6A994E]' : ''
                         }`}>{streak}</span>
                       </div>
                       <p className="text-sm text-gray-600 dark:text-white">Current Streak</p>
@@ -721,13 +721,13 @@ export default function GoalPage() {
                       className={`w-5 h-5 ${
                         groupStreak > 0
                           ? (userHasCheckedInToday
-                              ? 'text-orange-500'
+                              ? 'text-[#6A994E]'
                               : 'text-gray-400 dark:text-gray-500')
                           : 'text-gray-300 dark:text-gray-600'
                       }`}
                     />
                     <span className={`text-2xl font-bold ${
-                      groupStreak > 0 && userHasCheckedInToday ? 'text-orange-600 dark:text-orange-400' : ''
+                      groupStreak > 0 && userHasCheckedInToday ? 'text-[#6A994E]' : ''
                     }`}>{groupStreak}</span>
                   </div>
                   <p className="text-sm text-gray-600 dark:text-white">Current Streak</p>

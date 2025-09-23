@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -51,6 +51,8 @@ export default function HomePage() {
   const [newValue, setNewValue] = useState("")
   const [updatingValue, setUpdatingValue] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
+  const [showFab, setShowFab] = useState(true)
+  const lastScrollYRef = useRef(0)
   const EMOJI_OPTIONS = [
     '🎯', '💪', '🏃‍♂️', '🧘‍♀️', '📚', '💻', '🎨', '🎵', '🍎', '💧',
     '😴', '🏋️‍♂️', '🚴‍♂️', '🏊‍♀️', '🧠', '💡', '⭐', '🔥', '💎', '🌟'
@@ -94,6 +96,30 @@ export default function HomePage() {
     
     return () => window.removeEventListener('resize', checkMobile)
   }, [])
+
+  // Hide mobile FAB when scrolling down; show when scrolling up
+  useEffect(() => {
+    const onScroll = () => {
+      const currentY = window.scrollY || 0
+      const lastY = lastScrollYRef.current
+      const delta = currentY - lastY
+      // Update last scroll position
+      lastScrollYRef.current = currentY
+      // Always show near top
+      if (currentY < 10) {
+        if (!showFab) setShowFab(true)
+        return
+      }
+      // If scrolling down significantly, hide; if up, show
+      if (delta > 4) {
+        if (showFab) setShowFab(false)
+      } else if (delta < -4) {
+        if (!showFab) setShowFab(true)
+      }
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [showFab])
 
   const loadGroupGoals = async (nickname: string) => {
     // Skip if Supabase is not configured
@@ -635,7 +661,7 @@ export default function HomePage() {
                     className="hover:shadow-lg transition-shadow cursor-pointer h-full will-change-transform relative"
                     style={{ transform: isActiveSwipe ? `translateX(${swipeOffsetX}px)` : undefined, transition: !isActiveSwipe ? 'transform 150ms ease-out' : undefined }}
                   >
-                  <CardHeader className="pb-3">
+                  <CardHeader className="pb-1">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 min-w-0 flex-1">
                         <span className="text-2xl">{goal.emoji || '🎯'}</span>
@@ -654,9 +680,10 @@ export default function HomePage() {
                           </div>
                         </div>
                       </div>
+                    
                     </div>
                   </CardHeader>
-                  <CardContent className="pt-0">
+                  <CardContent className="pt-0 min-h-[160px]">
                     {isNumericGoal ? (
                       <div className="mb-3">
                         <div className="text-center mb-2">
@@ -705,34 +732,109 @@ export default function HomePage() {
                             {(() => {
                               const todayStr = getTodayDate()
                               const today = new Date(todayStr)
-                              const year = today.getFullYear()
-                              const monthIndex = today.getMonth() // 0-based
-                              const daysInMonth = new Date(year, monthIndex + 1, 0).getDate()
-                              const allMonthDates: string[] = []
-                              for (let day = 1; day <= daysInMonth; day++) {
-                                const d = new Date(year, monthIndex, day)
-                                const iso = d.toISOString().split('T')[0]
-                                allMonthDates.push(iso)
+                              const todayIso = today.toISOString().split('T')[0]
+                              // Show last 16 weeks ending this week
+                              const end = new Date(today)
+                              const dayNum = end.getDay() === 0 ? 7 : end.getDay() // 1..7 (Mon=1)
+                              // align to Sunday of current week
+                              end.setDate(end.getDate() + (7 - dayNum))
+                              const start = new Date(end)
+                              const totalDays = 16 * 7
+                              start.setDate(end.getDate() - (totalDays - 1))
+                              // align start to Monday
+                              const startDay = start.getDay() === 0 ? 7 : start.getDay()
+                              start.setDate(start.getDate() - (startDay - 1))
+                              // Build columns by week, each column has 7 rows (Mon..Sun)
+                              const weeks: string[][] = []
+                              const checked = new Set<string>(goal.checkins)
+                              const toLocalYmd = (d: Date) => {
+                                const y = d.getFullYear()
+                                const m = String(d.getMonth() + 1).padStart(2, '0')
+                                const dd = String(d.getDate()).padStart(2, '0')
+                                return `${y}-${m}-${dd}`
                               }
-                              const streakCount = Math.min(calculateStreak(goal.checkins), daysInMonth)
-                              const tileSize = 22 // px; tweak here if you want larger/smaller squares
-                                return (
-                                  <div className="grid grid-cols-12 gap-x-[2px] gap-y-[8px]">
-                                  {allMonthDates.map((date, idx) => {
-                                    const isFilled = idx < streakCount
-                                    return (
+                              let cursor = new Date(start)
+                              while (cursor <= end) {
+                                const col: string[] = []
+                                for (let r = 0; r < 7; r++) {
+                                  col.push(toLocalYmd(cursor))
+                                  cursor.setDate(cursor.getDate() + 1)
+                                }
+                                weeks.push(col)
+                              }
+                              const numWeeks = weeks.length
+                              const cell = 10 // px; compact dot size
+                              // Build month labels for columns (show label where a new month starts)
+                              const monthLabels = weeks.map((col) => {
+                                const firstOfMonthIso = col.find((iso) => new Date(iso).getDate() === 1)
+                                if (firstOfMonthIso) {
+                                  const labelDate = new Date(firstOfMonthIso)
+                                  return labelDate.toLocaleString(undefined, { month: 'short' })
+                                }
+                                return ''
+                              })
+
+                              return (
+                                <div className="w-full">
+                                  {/* Month labels row aligned with calendar, with left spacer equal to weekday column */}
+                                  <div className="flex items-center mb-0.5">
+                                    <div style={{ width: `${cell + 4}px` }} />
+                                    <div className="flex-1">
                                       <div
-                                        key={date}
-                                        className="rounded-sm"
-                                        style={{
-                                          width: `${tileSize}px`,
-                                          height: `${tileSize}px`,
-                                          background: isFilled ? 'linear-gradient(135deg, #386641, #6A994E)' : undefined,
-                                          backgroundColor: isFilled ? undefined : '#BFBFBF',
-                                        }}
-                                      />
-                                    )
-                                  })}
+                                        className="grid gap-1"
+                                        style={{ gridTemplateColumns: `repeat(${numWeeks}, 1fr)` }}
+                                      >
+                                        {monthLabels.map((label, i) => (
+                                          <div key={i} className="text-[10px] text-muted-foreground text-center h-3 leading-3">
+                                            {label}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  {/* Calendar grid with weekday labels aligned to dot rows */}
+                                  <div className="flex w-full items-start gap-2">
+                                    <div
+                                      className="grid gap-1"
+                                      style={{ gridTemplateRows: 'repeat(7, 1fr)', width: `${cell + 4}px` }}
+                                    >
+                                      {['M','T','W','T','F','S','S'].map((label, idx) => (
+                                        <div
+                                          key={`wd-${idx}`}
+                                          className="text-[10px] text-muted-foreground text-center"
+                                          style={{ height: `${cell}px`, lineHeight: `${cell}px` }}
+                                        >
+                                          {label}
+                                        </div>
+                                      ))}
+                                    </div>
+                                    <div className="flex-1">
+                                      <div
+                                        className="grid gap-1"
+                                        style={{ gridTemplateRows: 'repeat(7, 1fr)', gridTemplateColumns: `repeat(${numWeeks}, 1fr)`, gridAutoFlow: 'column' }}
+                                      >
+                                      {weeks.map((col, cIdx) => (
+                                        <div key={cIdx} className="contents">
+                                          {col.map((iso) => {
+                                            const isChecked = checked.has(iso)
+                                            const isToday = iso === todayIso
+                                            return (
+                                              <div
+                                                key={iso}
+                                                className={`rounded-full border border-black/10 dark:border-white/10 ${isChecked ? 'bg-[#6A994E]' : 'bg-zinc-200 dark:bg-zinc-800'} ${isToday ? 'ring-2 ring-[#6A994E]' : ''}`}
+                                                title={iso}
+                                                style={{
+                                                  width: `${cell}px`,
+                                                  height: `${cell}px`,
+                                                }}
+                                              />
+                                            )
+                                          })}
+                                        </div>
+                                      ))}
+                                      </div>
+                                    </div>
+                                  </div>
                                 </div>
                               )
                             })()}
@@ -778,48 +880,49 @@ export default function HomePage() {
                           </span>
                         </div>
                       )}
+                      {/* Right-aligned action button inside content */
+                      }
+                      <div className="shrink-0 flex flex-col items-center gap-1">
+                        {isNumericGoal ? (
+                          <>
+                            <Button
+                              size="icon"
+                              variant={isCompleted ? 'secondary' : 'default'}
+                              disabled={isCompleted || loggingSoloGoalIds.has(goal.id)}
+                              className="h-8 w-8 rounded-md"
+                              aria-label={isCompleted ? 'Completed' : 'Update'}
+                              onClick={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                openUpdateDialog(goal)
+                              }}
+                            >
+                              {isCompleted ? <Check className="w-5 h-5" /> : <Target className="w-5 h-5" />}
+                            </Button>
+                            <span className="text-[10px] text-muted-foreground">{isCompleted ? 'Completed' : 'Update'}</span>
+                          </>
+                        ) : (
+                          <>
+                            <Button
+                              size="icon"
+                              variant={checkedInToday ? 'secondary' : 'default'}
+                              disabled={checkedInToday || loggingSoloGoalIds.has(goal.id)}
+                              className="h-8 w-8 rounded-md bg-[#BFBFBF] text-black hover:bg-[#BFBFBF] hover:opacity-90 disabled:opacity-100"
+                              aria-label={checkedInToday ? 'Logged' : 'Log'}
+                              onClick={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                handleSoloLog(goal.id)
+                              }}
+                            >
+                              {checkedInToday ? <Check className="w-5 h-5" /> : null}
+                            </Button>
+                            <span className="text-[10px] text-muted-foreground">{checkedInToday ? 'Logged' : 'Log'}</span>
+                          </>
+                        )}
+                      </div>
                     </div>
                   </CardContent>
-                  {/* Bottom-right action button + label */}
-                  <div className="absolute bottom-3 right-3 flex flex-col items-center gap-1">
-                    {isNumericGoal ? (
-                      <>
-                        <Button
-                          size="icon"
-                          variant={isCompleted ? 'secondary' : 'default'}
-                          disabled={isCompleted || loggingSoloGoalIds.has(goal.id)}
-                          className="h-8 w-8 rounded-md"
-                          aria-label={isCompleted ? 'Completed' : 'Update'}
-                          onClick={(e) => {
-                            e.preventDefault()
-                            e.stopPropagation()
-                            openUpdateDialog(goal)
-                          }}
-                        >
-                          {isCompleted ? <Check className="w-5 h-5" /> : <Target className="w-5 h-5" />}
-                        </Button>
-                        <span className="text-[10px] text-muted-foreground">{isCompleted ? 'Completed' : 'Update'}</span>
-                      </>
-                    ) : (
-                      <>
-                        <Button
-                          size="icon"
-                          variant={checkedInToday ? 'secondary' : 'default'}
-                          disabled={checkedInToday || loggingSoloGoalIds.has(goal.id)}
-                          className="h-8 w-8 rounded-md"
-                          aria-label={checkedInToday ? 'Logged' : 'Log'}
-                          onClick={(e) => {
-                            e.preventDefault()
-                            e.stopPropagation()
-                            handleSoloLog(goal.id)
-                          }}
-                        >
-                          {checkedInToday ? <Check className="w-5 h-5" /> : null}
-                        </Button>
-                        <span className="text-[10px] text-muted-foreground">{checkedInToday ? 'Logged' : 'Log'}</span>
-                      </>
-                    )}
-                  </div>
                   </Card>
                 </Link>
               </div>
@@ -834,7 +937,7 @@ export default function HomePage() {
             return (
               <Link key={goal.id} href={`/goal/${goal.id}`} prefetch={false}>
                 <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full relative">
-                  <CardHeader className="pb-3">
+                  <CardHeader className="pb-1">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 min-w-0 flex-1">
                         <span className="text-2xl">{goal.emoji || '🎯'}</span>
@@ -846,26 +949,27 @@ export default function HomePage() {
                           </Badge>
                         </div>
                       </div>
-                      <div className="flex -space-x-1 shrink-0">
-                        {goal.participants.slice(0, 3).map((participant) => (
-                          <div
-                            key={participant.id}
-                            className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-white border-2 border-white dark:bg-zinc-800 dark:border-zinc-900 flex items-center justify-center text-xs"
-                            title={participant.nickname}
-                          >
-                            {participant.emoji}
-                          </div>
-                        ))}
-                        {goal.participants.length > 3 && (
-                          <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-gray-200 dark:bg-zinc-700 border-2 border-white dark:border-zinc-900 flex items-center justify-center text-xs">
-                            +{goal.participants.length - 3}
-                          </div>
-                        )}
+                      <div className="flex items-center gap-3 shrink-0">
+                        <div className="flex -space-x-1">
+                          {goal.participants.slice(0, 3).map((participant) => (
+                            <div
+                              key={participant.id}
+                              className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-white border-2 border-white dark:bg-zinc-800 dark:border-zinc-900 flex items-center justify-center text-xs"
+                              title={participant.nickname}
+                            >
+                              {participant.emoji}
+                            </div>
+                          ))}
+                          {goal.participants.length > 3 && (
+                            <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-gray-200 dark:bg-zinc-700 border-2 border-white dark:border-zinc-900 flex items-center justify-center text-xs">
+                              +{goal.participants.length - 3}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </CardHeader>
-                  <CardContent className="pt-0">
-                    
+                  <CardContent className="pt-0 min-h-[140px]">
                     <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Flame
@@ -887,26 +991,26 @@ export default function HomePage() {
                         {groupStreak} day streak
                       </span>
                     </div>
+                    {/* Right-aligned action button inside content for group */}
+                    <div className="shrink-0 flex flex-col items-center gap-1">
+                      <Button
+                        size="icon"
+                        variant={groupCheckedTodayGoalIds.has(goal.id) ? 'secondary' : 'default'}
+                        disabled={groupCheckedTodayGoalIds.has(goal.id) || loggingGroupGoalIds.has(goal.id)}
+                        className="h-8 w-8 rounded-md bg-[#BFBFBF] text-black hover:bg-[#BFBFBF] hover:opacity-90 disabled:opacity-100"
+                        aria-label={groupCheckedTodayGoalIds.has(goal.id) ? 'Logged' : 'Log'}
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          handleGroupLog(goal)
+                        }}
+                      >
+                        {groupCheckedTodayGoalIds.has(goal.id) ? <Check className="w-5 h-5" /> : null}
+                      </Button>
+                      <span className="text-[10px] text-muted-foreground">{groupCheckedTodayGoalIds.has(goal.id) ? 'Logged' : 'Log'}</span>
+                    </div>
                     </div>
                   </CardContent>
-                  {/* Bottom-right log button + label (group) */}
-                  <div className="absolute bottom-3 right-3 flex flex-col items-center gap-1">
-                    <Button
-                      size="icon"
-                      variant={groupCheckedTodayGoalIds.has(goal.id) ? 'secondary' : 'default'}
-                      disabled={groupCheckedTodayGoalIds.has(goal.id) || loggingGroupGoalIds.has(goal.id)}
-                      className="h-8 w-8 rounded-md"
-                      aria-label={groupCheckedTodayGoalIds.has(goal.id) ? 'Logged' : 'Log'}
-                      onClick={(e) => {
-                        e.preventDefault()
-                        e.stopPropagation()
-                        handleGroupLog(goal)
-                      }}
-                    >
-                      {groupCheckedTodayGoalIds.has(goal.id) ? <Check className="w-5 h-5" /> : null}
-                    </Button>
-                    <span className="text-[10px] text-muted-foreground">{groupCheckedTodayGoalIds.has(goal.id) ? 'Logged' : 'Log'}</span>
-                  </div>
                 </Card>
               </Link>
             )
@@ -945,7 +1049,7 @@ export default function HomePage() {
           <button
             aria-label="Quick create goal"
             onClick={() => setShowCreateSheet(true)}
-            className="sm:hidden fixed right-5 bottom-14 z-10 rounded-full h-14 w-14 bg-primary text-primary-foreground shadow-lg shadow-black/20 flex items-center justify-center"
+            className={`sm:hidden fixed right-5 bottom-14 z-10 rounded-full h-14 w-14 bg-primary text-primary-foreground shadow-lg shadow-black/20 flex items-center justify-center transition-opacity duration-300 ${showFab ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
           >
             <Plus className="w-6 h-6" />
           </button>
