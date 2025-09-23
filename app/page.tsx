@@ -392,7 +392,7 @@ export default function HomePage() {
             <div className="text-6xl mb-4">🎯</div>
             <CardTitle className="text-2xl">Welcome to Yuno</CardTitle>
             <CardDescription>
-              Yuno you gotta check in. A minimalist habit tracker for you and your friends.
+              Yuno you gotta check in. A gamified habit tracker for you and your friends.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -1073,7 +1073,7 @@ export default function HomePage() {
                   placeholder="e.g., Read 20m"
                   value={quickGoalName}
                   onChange={(e) => setQuickGoalName(e.target.value)}
-                  maxLength={25}
+                  maxLength={54}
                 />
               </div>
               <div className="space-y-2">
@@ -1102,7 +1102,7 @@ export default function HomePage() {
                   setQuickCreating(true)
                   try {
                     const goal = addSoloGoal({
-                      name: quickGoalName.trim().slice(0, 10),
+                      name: quickGoalName.trim().slice(0, 54),
                       type: 'solo',
                       duration_days: null,
                       checkins: [],
