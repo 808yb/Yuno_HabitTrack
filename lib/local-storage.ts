@@ -19,6 +19,11 @@ export interface SoloGoal {
   target_value?: number
   start_value?: number // Starting value for decreasing goals
   unit?: string // e.g., 'kg', 'days', 'books', etc.
+  // Hearts and forgiving streak for habit-type goals
+  hearts?: number // 0..3
+  streak_count?: number
+  last_processed_date?: string
+  last_checkin_date?: string
 }
 
 const USER_IDENTITY_KEY = 'yuno_user_identity'
@@ -122,13 +127,82 @@ const getSoloGoals = (): SoloGoal[] => {
   if (typeof window === 'undefined') return []
   
   const stored = localStorage.getItem(SOLO_GOALS_KEY)
-  return stored ? JSON.parse(stored) : []
+  const goals: SoloGoal[] = stored ? JSON.parse(stored) : []
+  // Backfill defaults for heart system on existing data
+  const today = getTodayDate()
+  let mutated = false
+  for (const g of goals) {
+    const isHabit = !g.goal_type || g.goal_type === 'habit'
+    if (isHabit) {
+      if (typeof g.hearts !== 'number') { g.hearts = 3; mutated = true }
+      const calc = calculateStreak(g.checkins)
+      if (typeof g.streak_count !== 'number') { g.streak_count = calc; mutated = true }
+      else if (g.streak_count < calc) { g.streak_count = calc; mutated = true }
+      if (!g.last_processed_date) { g.last_processed_date = today; mutated = true }
+      // Reconcile missed days since last processed up to yesterday
+      const startStr = g.last_processed_date || today
+      let cursor = new Date(startStr)
+      const end = new Date(today)
+      end.setDate(end.getDate() - 1)
+      const checkins = new Set(g.checkins)
+      let hearts = g.hearts ?? 3
+      let streak = g.streak_count ?? 0
+      // move to next day after last_processed_date
+      cursor.setDate(cursor.getDate() + 1)
+      while (cursor <= end) {
+        const y = cursor.getFullYear()
+        const m = String(cursor.getMonth() + 1).padStart(2, '0')
+        const d = String(cursor.getDate()).padStart(2, '0')
+        const ymd = `${y}-${m}-${d}`
+        if (!checkins.has(ymd)) {
+          if (hearts > 0) {
+            hearts -= 1
+          } else {
+            // Streak breaks; reset hearts for a fresh start
+            streak = 0
+            hearts = 3
+          }
+          mutated = true
+        } else {
+          // If user had a checkin on that day, ensure streak advances
+          streak += 1
+          mutated = true
+        }
+        cursor.setDate(cursor.getDate() + 1)
+      }
+      g.hearts = Math.max(0, Math.min(3, hearts))
+      g.streak_count = Math.max(0, streak)
+      g.last_processed_date = today
+    }
+  }
+  if (mutated) {
+    setSoloGoals(goals)
+  }
+  return goals
 }
 
 const setSoloGoals = (goals: SoloGoal[]): void => {
   if (typeof window === 'undefined') return
   
   localStorage.setItem(SOLO_GOALS_KEY, JSON.stringify(goals))
+}
+
+// Add hearts to all habit-type solo goals (capped at 3)
+const addHeartsToAllHabitGoals = (count: number = 1): void => {
+  if (!Number.isFinite(count) || count <= 0) return
+  const goals = getSoloGoals()
+  let changed = false
+  for (const g of goals) {
+    const isHabit = !g.goal_type || g.goal_type === 'habit'
+    if (!isHabit) continue
+    const current = typeof g.hearts === 'number' ? g.hearts : 3
+    const next = Math.min(3, current + count)
+    if (next !== current) {
+      g.hearts = next
+      changed = true
+    }
+  }
+  if (changed) setSoloGoals(goals)
 }
 
 // Fallback UUID generation function
@@ -150,6 +224,9 @@ const addSoloGoal = (goal: Omit<SoloGoal, 'id' | 'created_at'>): SoloGoal => {
     id: generateUUID(),
     created_at: new Date().toISOString(),
     emoji: goal.emoji || '🎯', // Default emoji if not provided
+    hearts: 3,
+    streak_count: 0,
+    last_processed_date: getTodayDate(),
   }
   
   const goals = getSoloGoals()
@@ -177,6 +254,15 @@ const addCheckinToSoloGoal = (goalId: string): void => {
     const today = getTodayDate() // Use getTodayDate here
     const prevCount = goal.checkins.length
     goal.checkins.push(today)
+    // Update forgiving streak/hearts for habit goals
+    if (!goal.goal_type || goal.goal_type === 'habit') {
+      goal.streak_count = (goal.streak_count ?? 0) + 1
+      goal.last_checkin_date = today
+      // Reward a heart every 5 logs
+      if ((goal.checkins.length % 5) === 0) {
+        goal.hearts = Math.min(3, (goal.hearts ?? 3) + 1)
+      }
+    }
     setSoloGoals(goals)
 
     // Award XP for habit completion according to rules
@@ -292,8 +378,14 @@ const setXpState = (state: XpState): void => {
 const addXp = (amount: number): void => {
   if (!Number.isFinite(amount)) return
   const current = getXpState()
+  const oldLevel = getLevelInfoFromXp(current.xp).level
   const next = { xp: Math.max(0, Math.floor(current.xp + amount)) }
   setXpState(next)
+  // If level increased, grant one heart to all habit goals (max 3)
+  const newLevel = getLevelInfoFromXp(next.xp).level
+  if (newLevel > oldLevel) {
+    try { addHeartsToAllHabitGoals(1) } catch {}
+  }
 }
 
 // Leveling: level 1 requires 100 xp, each level requirement grows by 1.2x
@@ -330,7 +422,9 @@ const getStreakXpMultiplier = (streak: number): number => {
 const awardXpForSoloCheckin = (goal: SoloGoal): void => {
   // Base points: 10 per completed habit
   // Apply streak-based multiplier
-  const streak = calculateStreak(goal.checkins)
+  const streak = (!goal.goal_type || goal.goal_type === 'habit') && typeof goal.streak_count === 'number'
+    ? goal.streak_count
+    : calculateStreak(goal.checkins)
   const multiplier = getStreakXpMultiplier(streak)
   const gained = Math.round(10 * multiplier)
   addXp(gained)
@@ -453,4 +547,6 @@ export {
   getXpState,
   addXp,
   getLevelInfoFromXp,
+  // Hearts helpers
+  addHeartsToAllHabitGoals,
 }

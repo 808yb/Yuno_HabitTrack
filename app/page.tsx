@@ -762,7 +762,10 @@ export default function HomePage() {
           {/* Leaderboard moved to modal */}
           {/* Solo Goals */}
           {soloGoals.map((goal) => {
-            const streak = calculateStreak(goal.checkins)
+            const computedStreak = calculateStreak(goal.checkins)
+            const streak = (!goal.goal_type || goal.goal_type === 'habit') && typeof goal.streak_count === 'number'
+              ? Math.max(goal.streak_count, computedStreak)
+              : computedStreak
             const checkedInToday = hasCheckedInToday(goal)
             const isActiveSwipe = swipeGoalId === goal.id
             const isNumericGoal = goal.goal_type && goal.goal_type !== 'habit'
@@ -829,13 +832,15 @@ export default function HomePage() {
                     className="hover:shadow-lg transition-shadow cursor-pointer h-full will-change-transform relative"
                     style={{ transform: isActiveSwipe ? `translateX(${swipeOffsetX}px)` : undefined, transition: !isActiveSwipe ? 'transform 150ms ease-out' : undefined }}
                   >
-                  {/* Type badge in top-right */}
-                  <div className="absolute top-2 right-2 z-10">
-                    <Badge variant="secondary" className="shrink-0">
-                      <User className="w-3 h-3 mr-1" />
-                      Solo
-                    </Badge>
-                  </div>
+                  {/* Type badge in top-right (hide for numeric solo goals) */}
+                  {!isNumericGoal && (
+                    <div className="absolute top-2 right-2 z-10">
+                      <Badge variant="secondary" className="shrink-0">
+                        <User className="w-3 h-3 mr-1" />
+                        Solo
+                      </Badge>
+                    </div>
+                  )}
                   <CardHeader className="pb-1 pr-16">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -844,10 +849,17 @@ export default function HomePage() {
                           <CardTitle className="text-base sm:text-lg pr-2 min-w-0 flex-1 whitespace-normal break-words leading-tight">
                             {goal.name}
                           </CardTitle>
+                          {(!goal.goal_type || goal.goal_type === 'habit') && (
+                            <div className="flex items-center gap-1 shrink-0" title={`Hearts: ${goal.hearts ?? 3}`}>
+                              {Array.from({ length: 3 }).map((_, i) => (
+                                <span key={i} className={`text-xs ${i < (goal.hearts ?? 3) ? '' : 'opacity-30'}`}>❤️</span>
+                              ))}
+                            </div>
+                          )}
                           {isNumericGoal && (
                             <div className="flex gap-1 shrink-0">
                               <Badge variant="outline" className="shrink-0 text-xs">
-                                {goal.goal_type === 'increasing' ? '📈' : '📉'}
+                                {goal.goal_type === 'increasing' ? 'Increasing 📈' : 'Decreasing 📉'}
                               </Badge>
                             </div>
                           )}

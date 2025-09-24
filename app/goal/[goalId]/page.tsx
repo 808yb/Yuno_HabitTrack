@@ -274,7 +274,10 @@ export default function GoalPage() {
   }
 
   if (soloGoal) {
-    const streak = calculateStreak(soloGoal.checkins)
+    const computedStreak = calculateStreak(soloGoal.checkins)
+    const streak = (!soloGoal.goal_type || soloGoal.goal_type === 'habit') && typeof soloGoal.streak_count === 'number'
+      ? Math.max(soloGoal.streak_count, computedStreak)
+      : computedStreak
     const highestStreak = calculateHighestStreak(soloGoal.checkins)
     const checkedInToday = hasCheckedInToday(soloGoal)
     const isNumericGoal = soloGoal.goal_type && soloGoal.goal_type !== 'habit'
@@ -350,17 +353,19 @@ export default function GoalPage() {
                         Solo Goal
                         {isNumericGoal && (
                           <span className="ml-2 px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded">
-                            {soloGoal.goal_type === 'increasing' ? '📈 Increasing' : '📉 Decreasing'}
+                            {soloGoal.goal_type === 'increasing' ? 'Increasing 📈' : 'Decreasing 📉'}
                           </span>
                         )}
                       </CardDescription>
                     </div>
                   </div>
                 </div>
-                <Badge variant="secondary">
-                  <User className="w-3 h-3 mr-1" />
-                  Solo
-                </Badge>
+                {!isNumericGoal && (
+                  <Badge variant="secondary">
+                    <User className="w-3 h-3 mr-1" />
+                    Solo
+                  </Badge>
+                )}
               </div>
             </CardHeader>
             <CardContent>
@@ -435,10 +440,19 @@ export default function GoalPage() {
                     </div>
                     <div className="text-center">
                       <div className="flex items-center justify-center gap-2 mb-2">
-                        <Calendar className="w-5 h-5 text-blue-500" />
-                        <span className="text-2xl font-bold">{soloGoal.checkins.length}</span>
+                        {(!soloGoal.goal_type || soloGoal.goal_type === 'habit') ? (
+                          <>
+                            <span className="text-xl">❤️</span>
+                            <span className="text-2xl font-bold">{soloGoal.hearts ?? 3}/3</span>
+                          </>
+                        ) : (
+                          <>
+                            <Calendar className="w-5 h-5 text-blue-500" />
+                            <span className="text-2xl font-bold">{soloGoal.checkins.length}</span>
+                          </>
+                        )}
                       </div>
-                      <p className="text-sm text-gray-600 dark:text-white">Total Check-ins</p>
+                      <p className="text-sm text-gray-600 dark:text-white">{(!soloGoal.goal_type || soloGoal.goal_type === 'habit') ? 'Hearts' : 'Total Check-ins'}</p>
                     </div>
                     <div className="text-center">
                       <div className="flex items-center justify-center gap-2 mb-2">
