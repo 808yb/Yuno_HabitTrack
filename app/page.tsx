@@ -848,14 +848,15 @@ export default function HomePage() {
                         <div className="flex items-start gap-3 min-w-0 flex-1">
                           <CardTitle className="text-base sm:text-lg pr-2 min-w-0 flex-1 whitespace-normal break-words leading-tight">
                             {goal.name}
-                          </CardTitle>
-                          {(!goal.goal_type || goal.goal_type === 'habit') && (
+                            {(!goal.goal_type || goal.goal_type === 'habit') && (
                             <div className="flex items-center gap-1 shrink-0" title={`Hearts: ${goal.hearts ?? 3}`}>
                               {Array.from({ length: 3 }).map((_, i) => (
                                 <span key={i} className={`text-xs ${i < (goal.hearts ?? 3) ? '' : 'opacity-30'}`}>❤️</span>
                               ))}
                             </div>
                           )}
+                          </CardTitle>
+                          
                           {isNumericGoal && (
                             <div className="flex gap-1 shrink-0">
                               <Badge variant="outline" className="shrink-0 text-xs">
