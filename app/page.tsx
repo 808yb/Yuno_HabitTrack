@@ -834,7 +834,7 @@ export default function HomePage() {
                   >
                   {/* Type badge in top-right (hide for numeric solo goals) */}
                   {!isNumericGoal && (
-                    <div className="absolute top-2 right-2 z-10">
+                    <div className="absolute top-auto right-6 z-10">
                       <Badge variant="secondary" className="shrink-0">
                         <User className="w-3 h-3 mr-1" />
                         Solo
